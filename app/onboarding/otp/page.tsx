@@ -106,6 +106,8 @@ export default function OtpPage() {
     // Mockup: any 6 digits pass
     await new Promise((r) => setTimeout(r, 800));
 
+    // Mark onboarding complete in Supabase metadata (device-independent)
+    await supabase.auth.updateUser({ data: { onboarding_complete: true } });
     setOnboardingStep(userId, "complete");
     router.push("/dashboard");
   }

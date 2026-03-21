@@ -80,6 +80,23 @@ export const translations = {
     comingSoon: "Segera Hadir",
     comingSoonDesc: "Halaman ini sedang dalam pengembangan.",
 
+    // Register
+    registerTitle: "Buat Akun",
+    registerSubtitle: "Mulai gratis, tanpa kartu kredit",
+    fullNameLabel: "Nama Lengkap",
+    fullNamePlaceholder: "Nama lengkap Anda",
+    confirmPasswordLabel: "Konfirmasi Kata Sandi",
+    confirmPasswordPlaceholder: "Ulangi kata sandi",
+    registerButton: "Buat Akun Gratis",
+    registerWithGoogle: "Daftar dengan Google",
+    hasAccount: "Sudah punya akun?",
+    loginLink: "Masuk",
+    registerLoading: "Mendaftarkan...",
+    passwordMinLength: "Kata sandi minimal 8 karakter",
+    passwordMismatch: "Kata sandi tidak cocok",
+    emailConfirmTitle: "Cek Email Anda",
+    emailConfirmMessage: "Kami telah mengirim link konfirmasi ke email Anda. Klik link tersebut lalu masuk ke akun Anda.",
+
     // Language toggle
     switchLang: "English",
   },
@@ -162,6 +179,23 @@ export const translations = {
     navProfile: "Profile",
     comingSoon: "Coming Soon",
     comingSoonDesc: "This page is under development.",
+
+    // Register
+    registerTitle: "Create Account",
+    registerSubtitle: "Start free, no credit card required",
+    fullNameLabel: "Full Name",
+    fullNamePlaceholder: "Your full name",
+    confirmPasswordLabel: "Confirm Password",
+    confirmPasswordPlaceholder: "Repeat your password",
+    registerButton: "Create Free Account",
+    registerWithGoogle: "Sign up with Google",
+    hasAccount: "Already have an account?",
+    loginLink: "Sign In",
+    registerLoading: "Creating account...",
+    passwordMinLength: "Password must be at least 8 characters",
+    passwordMismatch: "Passwords do not match",
+    emailConfirmTitle: "Check Your Email",
+    emailConfirmMessage: "We sent a confirmation link to your email. Click it, then sign in to your account.",
 
     // Language toggle
     switchLang: "Indonesia",
