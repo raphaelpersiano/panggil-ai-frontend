@@ -3,7 +3,7 @@
 import { useState, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft, Plus, X, ChevronDown, ChevronUp,
+  ArrowLeft, ChevronDown, ChevronUp, Plus, X,
   Zap, Calendar, Users, CheckSquare, Square,
   Clock, Search, Filter, Lightbulb, Info,
 } from "lucide-react";
@@ -23,11 +23,6 @@ interface Lead {
   createdAt: string;
 }
 
-interface TimeSlot {
-  id: string;
-  start: string;
-  end: string;
-}
 
 /* ─── Dummy lead pools ────────────────────────────────────── */
 const ALL_TELESALES_LEADS: Lead[] = [
@@ -125,23 +120,21 @@ function CreateCampaignForm() {
 
   /* form state */
   const [name,         setName]        = useState("");
-  const [type,         setType]        = useState<CampaignType>(initialType);
   const [description,  setDescription] = useState("");
   const [scheduleMode, setScheduleMode] = useState<ScheduleMode>("scheduled");
   const [startDate,    setStartDate]   = useState("");
   const [endDate,      setEndDate]     = useState("");
   const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]);
-  const [timeSlots,    setTimeSlots]   = useState<TimeSlot[]>([{ id: "1", start: "09:00", end: "17:00" }]);
+  const [dayTimes,     setDayTimes]    = useState<Record<number, string[]>>({ 1: ["09:00"], 2: ["09:00"], 3: ["09:00"], 4: ["09:00"], 5: ["09:00"] });
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [maxRetries,   setMaxRetries]  = useState(3);
-  const [retryHours,   setRetryHours]  = useState(24);
-  const [concurrent,   setConcurrent]  = useState(10);
+  const [retryMinutes, setRetryMinutes] = useState(30);
   const [searchQ,      setSearchQ]     = useState("");
   const [statusFilter, setStatusFilter] = useState<LeadStatus | "all">("all");
   const [sortFilter,   setSortFilter]  = useState<"newest" | "oldest" | "last_call">("newest");
   const [selectedIds,  setSelectedIds] = useState<Set<string>>(new Set());
 
-  const allLeads = type === "telesales" ? ALL_TELESALES_LEADS : ALL_COLLECTION_LEADS;
+  const allLeads = initialType === "telesales" ? ALL_TELESALES_LEADS : ALL_COLLECTION_LEADS;
 
   /* filtered leads */
   const filteredLeads = useMemo(() => {
@@ -160,21 +153,42 @@ function CreateCampaignForm() {
   const allFilteredSelected = filteredLeads.length > 0 && filteredLeads.every(l => selectedIds.has(l.id));
 
   function toggleDay(id: number) {
-    setSelectedDays(prev =>
-      prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id]
-    );
+    setSelectedDays(prev => {
+      if (prev.includes(id)) {
+        setDayTimes(dt => { const n = { ...dt }; delete n[id]; return n; });
+        return prev.filter(d => d !== id);
+      } else {
+        setDayTimes(dt => ({ ...dt, [id]: ["09:00"] }));
+        return [...prev, id];
+      }
+    });
   }
 
-  function addTimeSlot() {
-    setTimeSlots(prev => [...prev, { id: Date.now().toString(), start: "09:00", end: "17:00" }]);
+  function updateDayTime(dayId: number, index: number, time: string) {
+    setDayTimes(prev => {
+      const times = [...(prev[dayId] ?? ["09:00"])];
+      times[index] = time;
+      return { ...prev, [dayId]: times };
+    });
   }
 
-  function removeTimeSlot(id: string) {
-    setTimeSlots(prev => prev.filter(s => s.id !== id));
+  function addDayTime(dayId: number) {
+    setDayTimes(prev => {
+      const times = prev[dayId] ?? ["09:00"];
+      // default new slot = last time + 1 hour, capped at 23:00
+      const last = times[times.length - 1] ?? "09:00";
+      const [h, m] = last.split(":").map(Number);
+      const newH = Math.min(h + 1, 23);
+      const newTime = `${String(newH).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+      return { ...prev, [dayId]: [...times, newTime] };
+    });
   }
 
-  function updateSlot(id: string, field: "start" | "end", value: string) {
-    setTimeSlots(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
+  function removeDayTime(dayId: number, index: number) {
+    setDayTimes(prev => {
+      const times = (prev[dayId] ?? []).filter((_, i) => i !== index);
+      return { ...prev, [dayId]: times.length > 0 ? times : ["09:00"] };
+    });
   }
 
   function toggleLead(id: string) {
@@ -232,7 +246,9 @@ function CreateCampaignForm() {
           </button>
           <button
             className="px-4 py-2 bg-[#12672a] hover:bg-[#0e5222] text-white text-sm font-medium rounded-xl transition-colors shadow-md shadow-green-800/20 disabled:opacity-50"
-            disabled={!name || !endDate || selectedCount === 0}
+            disabled={scheduleMode === "immediate"
+              ? (!name || selectedCount === 0)
+              : (!name || !startDate || selectedDays.length === 0 || !endDate || selectedCount === 0)}
           >
             Buat Campaign ({selectedCount} leads)
           </button>
@@ -254,21 +270,12 @@ function CreateCampaignForm() {
             </div>
 
             <div>
-              <Label hint="Tipe leads dan agent yang digunakan">Tipe Campaign *</Label>
-              <div className="flex gap-3">
-                {(["telesales", "collection"] as const).map(opt => (
-                  <button
-                    key={opt}
-                    onClick={() => { setType(opt); setSelectedIds(new Set()); }}
-                    className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-all ${
-                      type === opt
-                        ? "bg-[#12672a]/10 border-[#12672a] text-[#12672a]"
-                        : "border-gray-200 text-gray-500 hover:border-gray-300"
-                    }`}
-                  >
-                    {opt === "telesales" ? "Telesales" : "Collection"}
-                  </button>
-                ))}
+              <Label hint="Tipe leads dan agent yang digunakan">Tipe Campaign</Label>
+              <div className="flex items-center h-10 px-4 rounded-xl border border-[#12672a] bg-[#12672a]/5 w-fit gap-2">
+                <span className="w-2 h-2 rounded-full bg-[#12672a]" />
+                <span className="text-sm font-semibold text-[#12672a]">
+                  {initialType === "telesales" ? "Telesales" : "Collection"}
+                </span>
               </div>
             </div>
 
@@ -315,20 +322,18 @@ function CreateCampaignForm() {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* Start date — only for scheduled */}
-            {scheduleMode === "scheduled" && (
+          {scheduleMode === "scheduled" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
                 <Label hint="Tanggal pertama campaign mulai berjalan">Tanggal Mulai *</Label>
                 <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
               </div>
-            )}
-
-            <div className={scheduleMode === "immediate" ? "md:col-span-2 md:max-w-xs" : ""}>
-              <Label hint="Campaign akan berhenti otomatis setelah tanggal ini">Tanggal Berakhir *</Label>
-              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+              <div>
+                <Label hint="Campaign akan berhenti otomatis setelah tanggal ini">Tanggal Berakhir *</Label>
+                <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Day & time — only for scheduled */}
           {scheduleMode === "scheduled" && (
@@ -368,48 +373,66 @@ function CreateCampaignForm() {
                 </div>
               </div>
 
-              {/* Time slots */}
-              <div>
-                <Label hint="Jam-jam di mana agent diizinkan melakukan panggilan pada hari yang dipilih">Slot Waktu Panggilan *</Label>
-                <div className="space-y-2 mt-2">
-                  {timeSlots.map((slot, idx) => (
-                    <div key={slot.id} className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400 w-4 shrink-0">{idx + 1}.</span>
-                      <div className="flex items-center gap-2 flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
-                        <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                        <input
-                          type="time"
-                          value={slot.start}
-                          onChange={e => updateSlot(slot.id, "start", e.target.value)}
-                          className="text-sm text-gray-700 bg-transparent outline-none"
-                        />
-                        <span className="text-xs text-gray-400 mx-1">–</span>
-                        <input
-                          type="time"
-                          value={slot.end}
-                          onChange={e => updateSlot(slot.id, "end", e.target.value)}
-                          className="text-sm text-gray-700 bg-transparent outline-none"
-                        />
-                      </div>
-                      {timeSlots.length > 1 && (
-                        <button
-                          onClick={() => removeTimeSlot(slot.id)}
-                          className="w-7 h-7 rounded-lg hover:bg-red-50 flex items-center justify-center text-gray-300 hover:text-red-400 transition-colors"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <button
-                    onClick={addTimeSlot}
-                    className="flex items-center gap-1.5 text-xs font-medium text-[#12672a] hover:text-[#0e5222] mt-1 transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Tambah slot waktu
-                  </button>
+              {/* Per-day time chips */}
+              {selectedDays.length > 0 && (
+                <div>
+                  <Label hint="Tambahkan satu atau lebih waktu mulai panggilan per hari">Waktu Panggilan per Hari *</Label>
+                  <div className="mt-2 border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
+                    {DAYS.filter(d => selectedDays.includes(d.id)).map(day => {
+                      const times = dayTimes[day.id] ?? ["09:00"];
+                      return (
+                        <div key={day.id} className="flex items-start gap-3 px-4 py-3 bg-white hover:bg-gray-50/50 transition-colors">
+                          {/* Day label */}
+                          <div className="w-14 shrink-0 pt-1.5">
+                            <span className="text-xs font-semibold text-gray-600">{day.full}</span>
+                          </div>
+
+                          {/* Chips + add button */}
+                          <div className="flex flex-wrap items-center gap-2 flex-1">
+                            {times.map((t, idx) => (
+                              <div
+                                key={idx}
+                                className="inline-flex items-center gap-1.5 bg-[#12672a]/10 border border-[#12672a]/20 rounded-lg px-2.5 py-1.5 group"
+                              >
+                                <Clock className="w-3 h-3 text-[#12672a]/70 shrink-0" />
+                                <input
+                                  type="time"
+                                  value={t}
+                                  onChange={e => updateDayTime(day.id, idx, e.target.value)}
+                                  className="text-xs font-medium text-[#12672a] bg-transparent outline-none w-[72px] tabular-nums"
+                                />
+                                {times.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeDayTime(day.id, idx)}
+                                    className="w-3.5 h-3.5 rounded-full hover:bg-red-100 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                                  >
+                                    <X className="w-2.5 h-2.5" />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+
+                            {/* Add time button */}
+                            <button
+                              type="button"
+                              onClick={() => addDayTime(day.id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-dashed border-gray-300 text-gray-400 hover:border-[#12672a] hover:text-[#12672a] hover:bg-[#12672a]/5 transition-all text-xs font-medium"
+                            >
+                              <Plus className="w-3 h-3" />
+                              Tambah
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+                    <Clock className="w-3 h-3 shrink-0" />
+                    Setiap waktu yang ditambahkan akan menjadi trigger panggilan baru pada hari tersebut.
+                  </p>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </Section>
@@ -450,19 +473,19 @@ function CreateCampaignForm() {
                   <div className="relative">
                     <Input
                       type="number" min={1}
-                      value={retryHours}
-                      onChange={e => setRetryHours(+e.target.value)}
+                      value={retryMinutes}
+                      onChange={e => setRetryMinutes(+e.target.value)}
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">jam</span>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">menit</span>
                   </div>
                 </div>
                 <div>
                   <Label hint="Jumlah panggilan simultan yang dapat dilakukan campaign ini">Maks. Panggilan Bersamaan</Label>
                   <div className="relative">
                     <Input
-                      type="number" min={1} max={100}
-                      value={concurrent}
-                      onChange={e => setConcurrent(+e.target.value)}
+                      type="number"
+                      value={10}
+                      disabled
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">saluran</span>
                   </div>
@@ -613,7 +636,7 @@ function CreateCampaignForm() {
           <div className="mt-3 flex items-start gap-1.5 text-xs text-gray-400">
             <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
             <span>
-              Menampilkan leads {type === "telesales" ? "Telesales" : "Collection"}.
+              Menampilkan leads {initialType === "telesales" ? "Telesales" : "Collection"}.
               Hanya leads yang <strong>belum masuk</strong> campaign aktif lain yang ditampilkan.
             </span>
           </div>

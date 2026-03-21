@@ -13,7 +13,6 @@ import {
 export default function RegisterPage() {
   const router = useRouter();
   const [lang, setLang] = useState<Language>("id");
-  const [fullName,         setFullName]         = useState("");
   const [email,            setEmail]            = useState("");
   const [password,         setPassword]         = useState("");
   const [confirmPassword,  setConfirmPassword]  = useState("");
@@ -41,7 +40,6 @@ export default function RegisterPage() {
       : "";
 
   const isValid =
-    fullName.trim().length > 0 &&
     email.trim().length > 0 &&
     password.length >= 8 &&
     password === confirmPassword;
@@ -55,9 +53,6 @@ export default function RegisterPage() {
     const { data, error: authError } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: { full_name: fullName },
-      },
     });
 
     if (authError) {
@@ -178,19 +173,6 @@ export default function RegisterPage() {
 
           {/* Form */}
           <form onSubmit={handleRegister} className="space-y-4">
-            {/* Full Name */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t(lang, "fullNameLabel")}</label>
-              <input
-                type="text"
-                value={fullName}
-                onChange={e => setFullName(e.target.value)}
-                placeholder={t(lang, "fullNamePlaceholder")}
-                required
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#12672a]/30 focus:border-[#12672a] transition-all placeholder:text-gray-400"
-              />
-            </div>
-
             {/* Email */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">{t(lang, "emailLabel")}</label>

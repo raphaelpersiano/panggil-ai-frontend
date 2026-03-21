@@ -98,7 +98,7 @@ export default function CampaignPage() {
           className="flex items-center gap-2 px-4 py-2.5 bg-[#12672a] hover:bg-[#0e5222] text-white text-sm font-medium rounded-xl transition-colors shadow-md shadow-green-800/20"
         >
           <Plus className="w-4 h-4" />
-          Buat Campaign
+          Buat Campaign {tab === "telesales" ? "Telesales" : "Collection"}
         </button>
       </div>
 
