@@ -159,13 +159,14 @@ export default function LogsPage() {
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const pageRows   = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  /* ── Stats (based on dateFrom/dateTo only, not search/agent filter) ── */
+  /* ── Stats (based on agentFilter + dateFrom/dateTo) ── */
   const statsRows = useMemo(() => {
     let rows = LOGS;
+    if (agentFilter !== "all") rows = rows.filter(l => l.agent === agentFilter);
     if (dateFrom) rows = rows.filter(l => logDate(l) >= dateFrom);
     if (dateTo)   rows = rows.filter(l => logDate(l) <= dateTo);
     return rows;
-  }, [dateFrom, dateTo]);
+  }, [agentFilter, dateFrom, dateTo]);
 
   const totalSeconds  = statsRows.reduce((s, l) => s + l.duration, 0);
   const totalMinutes  = (totalSeconds / 60).toFixed(1);
@@ -173,9 +174,9 @@ export default function LogsPage() {
   const totalCost     = statsRows.reduce((s, l) => s + l.cost, 0);
   const avgCost       = totalCalls > 0 ? Math.round(totalCost / totalCalls) : 0;
 
-  const statsLabel = dateFrom || dateTo
-    ? `${dateFrom || "—"} s/d ${dateTo || "—"}`
-    : "Semua waktu";
+  const agentLabel = agentFilter !== "all" ? (agentFilter === "telesales" ? "Telesales" : "Collection") : null;
+  const dateLabel  = dateFrom || dateTo ? `${dateFrom || "—"} s/d ${dateTo || "—"}` : null;
+  const statsLabel = [agentLabel, dateLabel].filter(Boolean).join(" · ") || "Semua waktu";
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
