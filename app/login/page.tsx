@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase, getOnboardingStep } from "@/lib/supabase";
 import { t, type Language } from "@/lib/i18n";
+import Link from "next/link";
 import {
   Phone, CheckCircle, TrendingUp, Users, Zap,
   Eye, EyeOff, ChevronRight, Globe
@@ -52,15 +53,20 @@ export default function LoginPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        const step = getOnboardingStep(session.user.id);
-        if (!step || step === "company-profile") {
-          router.replace("/onboarding/company-profile");
-        } else if (step === "otp") {
-          router.replace("/onboarding/otp");
-        } else {
-          router.replace("/dashboard");
-        }
+      if (!session) return;
+      // Existing users who completed onboarding go straight to dashboard
+      if (session.user.user_metadata?.onboarding_complete === true) {
+        router.replace("/dashboard");
+        return;
+      }
+      // New / mid-onboarding users — resume from last step
+      const step = getOnboardingStep(session.user.id);
+      if (!step || step === "company-profile") {
+        router.replace("/onboarding/company-profile");
+      } else if (step === "otp") {
+        router.replace("/onboarding/otp");
+      } else {
+        router.replace("/dashboard");
       }
     });
   }, [router]);
@@ -82,6 +88,12 @@ export default function LoginPage() {
     }
 
     if (data.session) {
+      // Existing user who already completed onboarding → dashboard directly
+      if (data.session.user.user_metadata?.onboarding_complete === true) {
+        router.replace("/dashboard");
+        return;
+      }
+      // Resume mid-onboarding
       const step = getOnboardingStep(data.session.user.id);
       if (!step || step === "company-profile") {
         router.replace("/onboarding/company-profile");
@@ -232,9 +244,9 @@ export default function LoginPage() {
 
           <p className="mt-6 text-center text-sm text-gray-500">
             {t(lang, "noAccount")}{" "}
-            <span className="text-primary font-medium cursor-pointer hover:underline">
+            <Link href="/register" className="text-[#12672a] font-medium hover:underline">
               {t(lang, "registerLink")}
-            </span>
+            </Link>
           </p>
         </div>
       </div>
