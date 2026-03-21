@@ -27,39 +27,38 @@ const FUNNEL_DATA = {
   ],
 };
 
-/* ─── Funnel SVG (trapezoid shape) ───────────────────────── */
+/* ─── Funnel SVG — fixed-size trapezoids ─────────────────── */
+// Heights are FIXED (not data-driven) so every stage is readable.
+// Left edge of each stage:
+const STAGE_HEIGHTS  = [200, 162, 126, 96, 72] as const;
+// Right edge of last stage (gentle final taper)
+const LAST_RIGHT_H   = 48;
+const FILLS          = ["#0d5222", "#12672a", "#1a8a38", "#25a849", "#35c45e"];
+
 function FunnelChart({ stages }: { stages: { label: string; value: number }[] }) {
-  const W = 600;
-  const H = 160;
-  const CY = H / 2;
-  const maxVal = stages[0].value;
-  const stageW = W / stages.length; // 120 each
+  const W     = 700;
+  const H     = 260;          // taller canvas gives badge room above funnel
+  const CY    = H / 2;
+  const sw    = W / stages.length; // stage width = 140
 
-  // Left-edge height per stage (proportional to value, min 20)
-  const heights = stages.map((s) =>
-    Math.max((s.value / maxVal) * (H - 16), 20)
-  );
-
-  // Right-edge height: equals left of next stage; last stage tapers to ~40%
+  const leftH  = (i: number) => STAGE_HEIGHTS[i];
   const rightH = (i: number) =>
-    i < stages.length - 1 ? heights[i + 1] : Math.max(heights[stages.length - 1] * 0.42, 12);
-
-  const FILLS = ["#0d5222", "#12672a", "#1a8a38", "#25a849", "#35c45e"];
+    i < stages.length - 1 ? STAGE_HEIGHTS[i + 1] : LAST_RIGHT_H;
 
   return (
     <div className="w-full overflow-x-auto">
       <svg
         viewBox={`0 0 ${W} ${H}`}
         className="w-full"
-        style={{ minWidth: 340, height: 160 }}
+        style={{ minWidth: 480, height: 220 }}
         preserveAspectRatio="xMidYMid meet"
       >
         {stages.map((stage, i) => {
-          const x1 = i * stageW;
-          const x2 = (i + 1) * stageW;
-          const h1 = heights[i];
-          const h2 = rightH(i);
-          const gap = i < stages.length - 1 ? 2 : 0; // 2px gap between stages
+          const x1  = i * sw;
+          const x2  = (i + 1) * sw;
+          const h1  = leftH(i);
+          const h2  = rightH(i);
+          const gap = i < stages.length - 1 ? 3 : 0;
 
           const points = [
             `${x1},${CY - h1 / 2}`,
@@ -68,67 +67,69 @@ function FunnelChart({ stages }: { stages: { label: string; value: number }[] })
             `${x1},${CY + h1 / 2}`,
           ].join(" ");
 
-          const textX = x1 + (x2 - x1) / 2;
+          const textX = x1 + sw / 2;
 
-          // Conversion rate from previous stage
+          // Conversion % from previous stage — badge above top-left corner of this stage
           const conv =
             i > 0
               ? `${((stage.value / stages[i - 1].value) * 100).toFixed(0)}%`
               : null;
 
-          // Badge sits just above the junction (right edge of this trapezoid)
-          const badgeX = x2 - gap;
-          const badgeY = CY - h2 / 2;
+          const badgeCX = x1;               // centered on the junction
+          const badgeTY = CY - h1 / 2;      // top of this stage's left edge
 
           return (
             <g key={i}>
               {/* Trapezoid */}
               <polygon points={points} fill={FILLS[i]} />
 
-              {/* Value label */}
+              {/* Value */}
               <text
                 x={textX}
-                y={CY - 7}
+                y={CY - 9}
                 textAnchor="middle"
                 fill="white"
-                fontSize="13"
-                fontWeight="700"
+                fontSize="15"
+                fontWeight="800"
+                fontFamily="inherit"
               >
                 {stage.value.toLocaleString("id-ID")}
               </text>
 
-              {/* Stage name */}
+              {/* Stage label */}
               <text
                 x={textX}
-                y={CY + 11}
+                y={CY + 13}
                 textAnchor="middle"
-                fill="rgba(255,255,255,0.82)"
-                fontSize="9.5"
+                fill="rgba(255,255,255,0.88)"
+                fontSize="10.5"
                 fontWeight="500"
+                fontFamily="inherit"
               >
                 {stage.label}
               </text>
 
-              {/* Conversion badge at junction — shown on stages 1–4 */}
-              {conv && i < stages.length && (
+              {/* Conversion badge — floats above junction */}
+              {conv && (
                 <g>
                   <rect
-                    x={badgeX - 22}
-                    y={badgeY - 20}
-                    width="44"
-                    height="16"
-                    rx="8"
+                    x={badgeCX - 24}
+                    y={badgeTY - 26}
+                    width="48"
+                    height="20"
+                    rx="10"
                     fill="white"
                     stroke="#d1d5db"
                     strokeWidth="1"
                   />
                   <text
-                    x={badgeX}
-                    y={badgeY - 8}
+                    x={badgeCX}
+                    y={badgeTY - 11}
                     textAnchor="middle"
                     fill="#374151"
-                    fontSize="9"
+                    fontSize="10"
                     fontWeight="700"
+                    fontFamily="inherit"
                   >
                     {conv}
                   </text>
