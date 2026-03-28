@@ -383,6 +383,12 @@ Lead dibagi menjadi dua jenis: **Telesales** dan **Collection**. Collection memi
 
 ### 5.1 Get List Leads
 
+Endpoint ini dipakai di dua konteks:
+1. **Halaman `/dashboard/leads`** — menampilkan semua leads milik user
+2. **Lead picker di campaign create** — memilih leads yang akan dimasukkan ke campaign
+
+Kedua konteks pakai endpoint yang sama. **Pagination wajib diimplementasi** karena jumlah leads bisa mencapai puluhan ribu.
+
 ```
 GET /leads
 ```
@@ -392,8 +398,9 @@ GET /leads
 ?page=1&limit=20
 &type=telesales|collection
 &status=uncontacted|connected|follow_up|promise_to_pay|closed
-&search=<nama atau nomor HP>
-&campaignId=<uuid>   (opsional, filter leads berdasarkan campaign)
+&search=<string>        pencarian pada nama, nomor HP, dan sumber (source)
+&sortBy=newest|oldest|last_call   (default: newest)
+&campaignId=<uuid>      (opsional) filter leads yang sudah ada di campaign ini
 ```
 
 **Response:**
@@ -428,11 +435,13 @@ GET /leads
   "meta": {
     "page": 1,
     "limit": 20,
-    "total": 120,
-    "totalPages": 6
+    "total": 10000,
+    "totalPages": 500
   }
 }
 ```
+
+> **Penting:** `meta.total` harus mencerminkan jumlah leads setelah filter diterapkan (bukan total semua leads). Ini dipakai frontend untuk menampilkan teks **"Pilih semua X leads yang cocok dengan filter"** di lead picker campaign.
 
 **Keterangan field `status`:**
 | Value | Label UI |
@@ -442,6 +451,13 @@ GET /leads
 | `follow_up` | Follow Up |
 | `promise_to_pay` | Janji Bayar *(collection only)* |
 | `closed` | Selesai |
+
+**Keterangan `sortBy`:**
+| Value | Urutan |
+|-------|--------|
+| `newest` | `createdAt` descending |
+| `oldest` | `createdAt` ascending |
+| `last_call` | `lastCallTime` descending, leads yang belum pernah dipanggil di bawah |
 
 ---
 
@@ -621,20 +637,21 @@ GET /campaigns
       "type": "telesales",
       "status": "active",
       "scheduleMode": "scheduled",
-      "startDate": "2026-03-01T09:00:00Z",
-      "endDate": "2026-03-31T18:00:00Z",
+      "startDate": "2026-03-01",
+      "endDate": "2026-03-31",
       "selectedDays": [1, 2, 3, 4, 5],
       "dayTimes": {
         "1": ["09:00", "14:00"],
-        "2": ["09:00", "14:00"],
-        "3": ["09:00", "14:00"],
-        "4": ["09:00", "14:00"],
-        "5": ["09:00", "14:00"]
+        "2": ["09:00"],
+        "3": ["09:00"],
+        "4": ["09:00"],
+        "5": ["09:00"]
       },
       "maxRetries": 3,
       "retryIntervalMinutes": 30,
-      "totalLeads": 100,
-      "calledLeads": 67,
+      "maxConcurrent": 10,
+      "totalLeads": 1240,
+      "calledLeads": 450,
       "createdAt": "2026-02-28T10:00:00Z"
     }
   ],
@@ -659,14 +676,18 @@ GET /campaigns
 **Keterangan field `scheduleMode`:**
 | Value | Arti |
 |-------|------|
-| `immediate` | Jalankan sekarang |
-| `scheduled` | Jadwalkan berdasarkan hari & jam |
+| `immediate` | Jalankan sekarang, status langsung `active` |
+| `scheduled` | Dijadwalkan; status `scheduled` hingga `startDate` tercapai |
 
 **Keterangan field `selectedDays`:**
-Array integer `0-6` (0 = Minggu, 1 = Senin, ..., 6 = Sabtu)
+Array integer `0–6` (0 = Minggu, 1 = Senin, …, 6 = Sabtu). Default UI: `[1,2,3,4,5]` (Senin–Jumat).
 
 **Keterangan field `dayTimes`:**
-Object dengan key = index hari (string), value = array string jam format `"HH:mm"`
+Object dengan key = index hari (string), value = array string jam format `"HH:mm"` (timezone WIB / UTC+7).
+Setiap elemen array adalah slot waktu panggilan yang terpisah pada hari tersebut.
+Contoh: `"1": ["09:00", "14:00"]` → di hari Senin, sistem akan mencoba menelepon leads di jam 09:00 dan lagi di jam 14:00.
+
+> **Aturan `dayTimes`:** hanya berisi key untuk hari-hari yang ada di `selectedDays`. Setiap hari wajib punya minimal satu slot waktu.
 
 ---
 
@@ -702,7 +723,7 @@ GET /campaigns/summary
 GET /campaigns/:id
 ```
 
-**Response:** object campaign lengkap seperti di 6.1 (single object).
+**Response:** object campaign lengkap seperti di 6.1 (single object, bukan array).
 
 ---
 
@@ -712,29 +733,85 @@ GET /campaigns/:id
 POST /campaigns
 ```
 
-**Request Body:**
+#### Scheduling
+
+`startDate` dan `endDate` dikirim sebagai string `YYYY-MM-DD` (dari `<input type="date">` di UI). Semua jam dalam `dayTimes` dianggap WIB (UTC+7).
+
+#### Lead Selection — dua mode
+
+Karena jumlah leads bisa mencapai puluhan ribu, frontend **tidak** mengirim array `leadIds` secara flat. Sebagai gantinya, digunakan objek `leadSelection` dengan dua mode:
+
+**Mode 1 — `explicit`**: user memilih leads satu per satu (atau beberapa via checkbox).
+```json
+"leadSelection": {
+  "mode": "explicit",
+  "leadIds": [
+    "550e8400-e29b-41d4-a716-446655440001",
+    "550e8400-e29b-41d4-a716-446655440002"
+  ]
+}
+```
+
+**Mode 2 — `filter`**: user klik **"Pilih semua X leads yang cocok dengan filter"**. Backend yang resolve leads-nya berdasarkan kriteria filter.
+```json
+"leadSelection": {
+  "mode": "filter",
+  "filter": {
+    "status": "uncontacted",
+    "search": "budi"
+  }
+}
+```
+> Field `status` dan `search` di dalam `filter` bersifat opsional. Jika kosong/null, berarti semua leads milik user bertipe campaign ini dimasukkan.
+
+---
+
+**Request Body lengkap — contoh campaign terjadwal:**
 ```json
 {
   "name": "Kampanye Q1 2026",
   "description": "Target pelanggan baru segmen UMKM",
   "type": "telesales",
   "scheduleMode": "scheduled",
-  "startDate": "2026-03-01T09:00:00Z",
-  "endDate": "2026-03-31T18:00:00Z",
+  "startDate": "2026-03-01",
+  "endDate": "2026-03-31",
   "selectedDays": [1, 2, 3, 4, 5],
   "dayTimes": {
     "1": ["09:00", "14:00"],
-    "2": ["09:00", "14:00"],
-    "3": ["09:00", "14:00"],
-    "4": ["09:00", "14:00"],
-    "5": ["09:00", "14:00"]
+    "2": ["09:00"],
+    "3": ["09:00"],
+    "4": ["09:00"],
+    "5": ["09:00"]
   },
   "maxRetries": 3,
   "retryIntervalMinutes": 30,
-  "leadIds": [
-    "550e8400-e29b-41d4-a716-446655440001",
-    "550e8400-e29b-41d4-a716-446655440002"
-  ]
+  "maxConcurrent": 10,
+  "leadSelection": {
+    "mode": "explicit",
+    "leadIds": [
+      "550e8400-e29b-41d4-a716-446655440001",
+      "550e8400-e29b-41d4-a716-446655440002"
+    ]
+  }
+}
+```
+
+**Request Body lengkap — contoh immediate + filter:**
+```json
+{
+  "name": "Blast Semua Uncontacted",
+  "description": "",
+  "type": "collection",
+  "scheduleMode": "immediate",
+  "maxRetries": 2,
+  "retryIntervalMinutes": 60,
+  "maxConcurrent": 10,
+  "leadSelection": {
+    "mode": "filter",
+    "filter": {
+      "status": "uncontacted"
+    }
+  }
 }
 ```
 
@@ -745,14 +822,16 @@ POST /campaigns
 | `description` | opsional, string, max 1000 karakter |
 | `type` | required, `"telesales"` \| `"collection"` |
 | `scheduleMode` | required, `"immediate"` \| `"scheduled"` |
-| `startDate` | required jika `scheduleMode=scheduled`, ISO 8601 |
-| `endDate` | required jika `scheduleMode=scheduled`, ISO 8601, setelah `startDate` |
-| `selectedDays` | required jika `scheduleMode=scheduled`, array `0-6`, minimal 1 |
-| `dayTimes` | required jika `scheduleMode=scheduled`, minimal 1 jam per hari yang dipilih |
-| `maxRetries` | required, integer, `1–5` |
+| `startDate` | required jika `scheduleMode=scheduled`, format `YYYY-MM-DD`, tidak boleh di masa lalu |
+| `endDate` | required jika `scheduleMode=scheduled`, format `YYYY-MM-DD`, setelah `startDate` |
+| `selectedDays` | required jika `scheduleMode=scheduled`, array integer `0–6`, minimal 1 elemen |
+| `dayTimes` | required jika `scheduleMode=scheduled`; key harus sesuai `selectedDays`; setiap hari minimal 1 slot; format jam `"HH:mm"` |
+| `maxRetries` | required, integer, `1–10` |
 | `retryIntervalMinutes` | required, integer, `15–120` |
-| `leadIds` | required, array UUID, minimal 1 lead |
-| *Lead type harus sesuai campaign type* | `type=telesales` → semua leadIds harus lead telesales |
+| `maxConcurrent` | required, integer, `1–50` (UI saat ini hardcoded 10) |
+| `leadSelection.mode` | required, `"explicit"` \| `"filter"` |
+| `leadSelection.leadIds` | required jika `mode=explicit`, array UUID, minimal 1, semua lead harus milik user dan bertipe sama dengan `type` campaign |
+| `leadSelection.filter` | required jika `mode=filter`; backend resolve semua leads user bertipe `type` yang cocok dengan filter |
 
 **Response:**
 ```json
@@ -786,6 +865,16 @@ PATCH /campaigns/:id/status
 ```
 
 Nilai yang diizinkan: `"active"` | `"paused"` | `"completed"`
+
+**Transisi status yang valid:**
+| Dari | Ke | Keterangan |
+|------|-----|-----------|
+| `draft` | `active` | Jalankan sekarang |
+| `scheduled` | `active` | Paksa mulai lebih awal |
+| `scheduled` | `paused` | Tunda sebelum mulai |
+| `active` | `paused` | Hentikan sementara |
+| `paused` | `active` | Lanjutkan |
+| `active` | `completed` | Selesaikan paksa |
 
 **Response:** object campaign yang diperbarui.
 
@@ -1013,7 +1102,7 @@ documentType: "nib" | "npwp"
 | `POST` | `/billing/invoices` | Buat invoice top-up via Xendit | ✓ |
 | `GET` | `/billing/transactions` | Riwayat transaksi (topup & usage) | ✓ |
 | `POST` | `/billing/xendit-callback` | Webhook dari Xendit (no auth, token header) | — |
-| `GET` | `/leads` | List leads dengan filter & pagination | ✓ |
+| `GET` | `/leads` | List leads dengan filter, sort & pagination | ✓ |
 | `GET` | `/leads/:id` | Detail satu lead | ✓ |
 | `POST` | `/leads` | Buat lead baru (single) | ✓ |
 | `POST` | `/leads/import` | Import leads bulk via CSV/XLSX | ✓ |
@@ -1022,7 +1111,7 @@ documentType: "nib" | "npwp"
 | `GET` | `/campaigns` | List campaigns dengan filter | ✓ |
 | `GET` | `/campaigns/summary` | Stats ringkasan campaigns | ✓ |
 | `GET` | `/campaigns/:id` | Detail satu campaign | ✓ |
-| `POST` | `/campaigns` | Buat campaign baru | ✓ |
+| `POST` | `/campaigns` | Buat campaign (explicit IDs atau filter-based leads) | ✓ |
 | `PATCH` | `/campaigns/:id/status` | Update status campaign | ✓ |
 | `DELETE` | `/campaigns/:id` | Hapus campaign | ✓ |
 | `GET` | `/logs` | List call logs dengan filter & sort | ✓ |
@@ -1041,10 +1130,11 @@ documentType: "nib" | "npwp"
 
 ### Relasi Data
 - Satu **User** memiliki banyak **Campaign**, **Lead**, **Transaction**
-- Satu **Campaign** memiliki banyak **Lead** (many-to-many lewat tabel junction)
+- Satu **Campaign** memiliki banyak **Lead** (many-to-many lewat tabel junction `campaign_leads`)
 - Satu **Lead** bisa masuk ke banyak **Campaign**
 - Satu **Campaign** menghasilkan banyak **Call Log**
 - Satu **Lead** memiliki banyak **Call Log**
+- Tabel junction `campaign_leads` perlu menyimpan status panggilan per-lead per-campaign (misal: sudah dipanggil berapa kali, kapan terakhir dicoba)
 
 ### Tentang Occasions (Tipe Layanan)
 - `occasions` di profil user menentukan fitur apa yang terlihat di UI
@@ -1056,5 +1146,22 @@ documentType: "nib" | "npwp"
 - Frontend sudah mengirimkan dalam format ini
 
 ### Status Lead dan Lifecycle
-- Lead tidak bisa dihapus jika masih aktif di campaign yang sedang berjalan (`status=active`)
+- Lead tidak bisa dihapus jika masih ada di campaign berstatus `active` atau `scheduled`
 - Status `promise_to_pay` hanya valid untuk lead bertipe `collection`
+
+### Scheduling & Timezone
+- Semua jam di `dayTimes` dianggap **WIB (UTC+7)**
+- `startDate` / `endDate` adalah tanggal lokal WIB (format `YYYY-MM-DD`)
+- Backend bertanggung jawab mengkonversi ke UTC untuk penjadwalan internal
+
+### Mekanisme Retry
+- `maxRetries`: jumlah maksimum percobaan ulang **setelah** percobaan pertama gagal (total panggilan per lead = 1 + maxRetries)
+- `retryIntervalMinutes`: jeda minimum antar percobaan
+- Lead dianggap "gagal permanen" setelah habis semua retry; statusnya tidak berubah otomatis (diserahkan ke logika bisnis backend)
+
+### `leadSelection.mode = "filter"` — Behavior Backend
+Saat backend menerima `mode: "filter"`:
+1. Query semua leads milik user dengan `type` yang sama dengan campaign
+2. Terapkan `filter.status` dan `filter.search` jika ada
+3. Snapshot hasilnya ke tabel `campaign_leads` pada saat campaign dibuat
+4. **Penting**: ini adalah snapshot statis — leads yang ditambahkan setelah campaign dibuat **tidak** otomatis masuk campaign tersebut
