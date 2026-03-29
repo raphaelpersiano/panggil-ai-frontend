@@ -12,6 +12,8 @@ import type { Lead, LeadStatus, Occasion } from "@/lib/types";
 
 type Tab = Occasion;
 
+const PAGE_SIZE = 20;
+
 const FALLBACK_TELESALES: Lead[] = [
   { id: "1", type: "telesales", name: "Budi Santoso", mobile: "6281234567890", source: "Facebook Ads", status: "connected", lastCallTime: "2026-03-19T14:32:00Z", createdAt: "2026-03-10T00:00:00Z" },
   { id: "2", type: "telesales", name: "Siti Rahayu", mobile: "6282345678901", source: "Instagram", status: "follow_up", lastCallTime: "2026-03-18T09:15:00Z", createdAt: "2026-03-10T00:00:00Z" },
@@ -19,9 +21,9 @@ const FALLBACK_TELESALES: Lead[] = [
 ];
 
 const FALLBACK_COLLECTION: Lead[] = [
-  { id: "4", type: "collection", name: "Bambang Sudarsono", mobile: "6281298765432", source: "Internal DB", status: "connected", outstanding: 45000000, emi: 2500000, emiDueDate: "2026-03-25", lastCallTime: "2026-03-19T09:00:00Z", createdAt: "2026-03-01T00:00:00Z" },
-  { id: "5", type: "collection", name: "Rina Marlina", mobile: "6282187654321", source: "Internal DB", status: "follow_up", outstanding: 12500000, emi: 850000, emiDueDate: "2026-03-20", lastCallTime: "2026-03-17T14:10:00Z", createdAt: "2026-03-01T00:00:00Z" },
-  { id: "6", type: "collection", name: "Joko Susilo", mobile: "6283276543210", source: "Core Banking", status: "uncontacted", outstanding: 78000000, emi: 4200000, emiDueDate: "2026-03-22", lastCallTime: null, createdAt: "2026-03-02T00:00:00Z" },
+  { id: "4", type: "collection", name: "Bambang Sudarsono", mobile: "6281298765432", source: "Internal DB", status: "connected", lastCallTime: "2026-03-19T09:00:00Z", createdAt: "2026-03-01T00:00:00Z" },
+  { id: "5", type: "collection", name: "Rina Marlina", mobile: "6282187654321", source: "Internal DB", status: "follow_up", lastCallTime: "2026-03-17T14:10:00Z", createdAt: "2026-03-01T00:00:00Z" },
+  { id: "6", type: "collection", name: "Joko Susilo", mobile: "6283276543210", source: "Core Banking", status: "uncontacted", lastCallTime: null, createdAt: "2026-03-02T00:00:00Z" },
 ];
 
 const statusConfig: Record<LeadStatus, { label: string; className: string }> = {
@@ -61,36 +63,46 @@ export default function LeadsPage() {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<LeadStatus | "all">("all");
+  const [pageByTab, setPageByTab] = useState<Record<Tab, number>>({ telesales: 1, collection: 1 });
   const [rows, setRows] = useState<Record<Tab, Lead[]>>({ telesales: FALLBACK_TELESALES, collection: FALLBACK_COLLECTION });
   const [totals, setTotals] = useState<Record<Tab, number>>({ telesales: FALLBACK_TELESALES.length, collection: FALLBACK_COLLECTION.length });
+  const [totalPagesByTab, setTotalPagesByTab] = useState<Record<Tab, number>>({ telesales: 1, collection: 1 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [usingFallback, setUsingFallback] = useState(false);
 
+  const activePage = pageByTab[activeTab];
+
   useEffect(() => {
     let cancelled = false;
 
-    async function load(tab: Tab) {
+    async function load(tab: Tab, page: number) {
       setLoading(true);
       setError(null);
 
       try {
         const [active, inactive] = await Promise.all([
-          listLeads({ type: tab, page: 1, limit: 100, status: statusFilter, search, sortBy: "newest" }),
-          listLeads({ type: tab === "telesales" ? "collection" : "telesales", page: 1, limit: 100, sortBy: "newest" }),
+          listLeads({ type: tab, page, limit: PAGE_SIZE, status: statusFilter, search, sortBy: "newest" }),
+          listLeads({ type: tab === "telesales" ? "collection" : "telesales", page: 1, limit: 1, sortBy: "newest" }),
         ]);
 
         if (cancelled) return;
 
+        const inactiveTab = tab === "telesales" ? "collection" : "telesales";
         setRows((prev) => ({
           ...prev,
           [tab]: active.data,
-          [tab === "telesales" ? "collection" : "telesales"]: inactive.data,
+          [inactiveTab]: prev[inactiveTab],
         }));
         setTotals((prev) => ({
           ...prev,
           [tab]: active.meta?.total ?? active.data.length,
-          [tab === "telesales" ? "collection" : "telesales"]: inactive.meta?.total ?? inactive.data.length,
+          [inactiveTab]: inactive.meta?.total ?? prev[inactiveTab],
+        }));
+        setTotalPagesByTab((prev) => ({
+          ...prev,
+          [tab]: active.meta?.totalPages ?? Math.max(1, Math.ceil((active.meta?.total ?? active.data.length) / PAGE_SIZE)),
+          [inactiveTab]: inactive.meta?.totalPages ?? prev[inactiveTab],
         }));
         setUsingFallback(false);
       } catch (err) {
@@ -102,27 +114,32 @@ export default function LeadsPage() {
       }
     }
 
-    load(activeTab);
+    load(activeTab, activePage);
     return () => {
       cancelled = true;
     };
-  }, [activeTab, search, statusFilter]);
+  }, [activeTab, activePage, search, statusFilter]);
 
   function switchTab(tab: Tab) {
     setActiveTab(tab);
     setSearch("");
     setStatusFilter("all");
+    setPageByTab((prev) => ({ ...prev, [tab]: 1 }));
     router.replace(`/dashboard/leads?tab=${tab}`, { scroll: false });
   }
 
   const activeRows = useMemo(() => rows[activeTab], [rows, activeTab]);
+  const totalPages = totalPagesByTab[activeTab];
+  const total = totals[activeTab];
+  const rangeStart = total === 0 ? 0 : (activePage - 1) * PAGE_SIZE + 1;
+  const rangeEnd = total === 0 ? 0 : Math.min(total, rangeStart + activeRows.length - 1);
 
   return (
     <div className="p-6 lg:p-8 min-h-full">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Leads</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Kelola dan pantau semua prospek Anda</p>
+          <p className="text-sm text-gray-500 mt-0.5">Kelola dan pantau semua prospek Anda tanpa memuat seluruh dataset sekaligus</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -153,11 +170,11 @@ export default function LeadsPage() {
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input type="text" placeholder="Cari nama, nomor, atau sumber..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" />
+          <input type="text" placeholder="Cari nama, nomor, atau sumber..." value={search} onChange={(e) => { setSearch(e.target.value); setPageByTab((prev) => ({ ...prev, [activeTab]: 1 })); }} className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" />
         </div>
 
         <div className="relative">
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as LeadStatus | "all")} className="appearance-none pl-3 pr-9 py-2.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-gray-700 cursor-pointer">
+          <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as LeadStatus | "all"); setPageByTab((prev) => ({ ...prev, [activeTab]: 1 })); }} className="appearance-none pl-3 pr-9 py-2.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-gray-700 cursor-pointer">
             <option value="all">Semua Status</option>
             <option value="uncontacted">Belum Dihubungi</option>
             <option value="connected">Terhubung</option>
@@ -177,9 +194,18 @@ export default function LeadsPage() {
 
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         {activeTab === "telesales" ? <TelesalesTable data={activeRows} loading={loading} /> : <CollectionTable data={activeRows} loading={loading} />}
-      </div>
 
-      <p className="text-xs text-gray-400 mt-3 text-right">Menampilkan {activeRows.length} dari {totals[activeTab]} leads</p>
+        <div className="flex flex-col gap-3 border-t border-gray-100 bg-gray-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-xs text-gray-500">
+            Menampilkan <span className="font-semibold text-gray-700">{rangeStart}-{rangeEnd}</span> dari <span className="font-semibold text-gray-700">{total}</span> leads
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">Halaman {activePage} dari {totalPages}</span>
+            <button onClick={() => setPageByTab((prev) => ({ ...prev, [activeTab]: Math.max(1, prev[activeTab] - 1) }))} disabled={activePage === 1 || loading} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">← Prev</button>
+            <button onClick={() => setPageByTab((prev) => ({ ...prev, [activeTab]: Math.min(totalPages, prev[activeTab] + 1) }))} disabled={activePage === totalPages || loading} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">Next →</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

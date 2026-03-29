@@ -173,8 +173,8 @@ export default function LogsPage() {
   return (
     <div className="p-8 max-w-7xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Call Logs</h1>
-        <p className="text-xs text-gray-400 mt-0.5">Riwayat seluruh panggilan yang dilakukan oleh AI agent</p>
+        <h1 className="text-xl font-bold text-gray-900">Outbound Call Logs</h1>
+        <p className="text-xs text-gray-400 mt-0.5">Riwayat panggilan keluar dari tabel Supabase <code className="font-mono">calls</code> via backend API</p>
       </div>
 
       {(usingFallback || error) && (
