@@ -19,6 +19,10 @@ import type {
   UpdateProfilePayload,
   UploadedDocument,
   UserProfile,
+  SendOtpPayload,
+  SendOtpResponse,
+  VerifyOtpPayload,
+  VerifyOtpResponse,
 } from "@/lib/types";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
@@ -175,6 +179,24 @@ export async function uploadDocument(file: File, documentType: "nib" | "npwp") {
   }
 
   return json.data as UploadedDocument;
+}
+
+export async function sendOtp(payload: SendOtpPayload) {
+  const response = await request<SendOtpResponse>("/users/otp/send", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  return response.data;
+}
+
+export async function verifyOtp(payload: VerifyOtpPayload) {
+  const response = await request<VerifyOtpResponse>("/users/otp/verify", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  return response.data;
 }
 
 export async function listLogs(params: CallLogListParams) {

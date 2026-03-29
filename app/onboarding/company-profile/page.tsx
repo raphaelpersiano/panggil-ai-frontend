@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { supabase, setOnboardingStep, setOnboardingData, getOnboardingData } from "@/lib/supabase";
 import { t, type Language } from "@/lib/i18n";
 import OnboardingLayout from "@/components/OnboardingLayout";
-import { Building2, User, Phone, Briefcase, ChevronRight } from "lucide-react";
+import { sendOtp, updateProfile } from "@/lib/api";
+import { Building2, User, Phone, Briefcase, ChevronRight, AlertCircle } from "lucide-react";
 
 type Occasion = "telesales" | "collection";
 
@@ -14,6 +15,8 @@ export default function CompanyProfilePage() {
   const [lang, setLang] = useState<Language>("id");
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [usingFallback, setUsingFallback] = useState(false);
 
   const [picName, setPicName] = useState("");
   const [picMobile, setPicMobile] = useState("");
@@ -56,18 +59,30 @@ export default function CompanyProfilePage() {
     if (occasions.length === 0) return;
 
     setLoading(true);
+    setError("");
 
-    setOnboardingData(userId, {
-      picName,
-      picMobile,
-      companyName,
+    const normalizedMobile = picMobile.replace(/\D/g, "");
+    const payload = {
+      picName: picName.trim(),
+      picMobile: normalizedMobile,
+      companyName: companyName.trim(),
       occasions,
-    });
-    setOnboardingStep(userId, "otp");
+    };
 
-    // Small delay for UX feel
-    await new Promise((r) => setTimeout(r, 600));
-    router.push("/onboarding/otp");
+    setOnboardingData(userId, payload);
+
+    try {
+      await updateProfile(payload);
+      await sendOtp({ mobile: normalizedMobile });
+      setUsingFallback(false);
+      setOnboardingStep(userId, "otp");
+      router.push("/onboarding/otp");
+    } catch (err) {
+      setUsingFallback(true);
+      setError(err instanceof Error ? err.message : "Gagal menyimpan profil perusahaan.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   const isValid =
@@ -84,6 +99,15 @@ export default function CompanyProfilePage() {
       onLangToggle={() => setLang(lang === "id" ? "en" : "id")}
     >
       <div>
+        {(usingFallback || error) && (
+          <div className="mb-6 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              Onboarding backend belum rapi. Profil perusahaan sekarang mencoba simpan ke backend dulu sebelum OTP dikirim. {error}
+            </span>
+          </div>
+        )}
+
         {/* Header */}
         <div className="mb-8">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center shadow-lg shadow-primary/20 mb-5">

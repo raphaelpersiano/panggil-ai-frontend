@@ -179,6 +179,25 @@ export interface UploadedDocument {
   uploadedAt?: string;
 }
 
+export interface SendOtpPayload {
+  mobile: string;
+}
+
+export interface SendOtpResponse {
+  message: string;
+  expiresIn: number;
+}
+
+export interface VerifyOtpPayload {
+  mobile: string;
+  otp: string;
+}
+
+export interface VerifyOtpResponse {
+  verified: boolean;
+  onboardingComplete: boolean;
+}
+
 export interface CallLog {
   callId: string;
   campaignId: string;

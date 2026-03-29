@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { supabase, setOnboardingStep, getOnboardingData } from "@/lib/supabase";
 import { t, type Language } from "@/lib/i18n";
 import OnboardingLayout from "@/components/OnboardingLayout";
-import { ShieldCheck, RefreshCw, ChevronRight, ChevronLeft } from "lucide-react";
+import { sendOtp, verifyOtp } from "@/lib/api";
+import { ShieldCheck, RefreshCw, ChevronRight, ChevronLeft, AlertCircle } from "lucide-react";
 
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN = 60;
@@ -24,6 +25,8 @@ export default function OtpPage() {
   const [canResend, setCanResend] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [shake, setShake] = useState(false);
+  const [error, setError] = useState("");
+  const [usingFallback, setUsingFallback] = useState(false);
 
   // Auth guard
   useEffect(() => {
@@ -102,24 +105,51 @@ export default function OtpPage() {
     if (code.length < OTP_LENGTH) return;
 
     setLoading(true);
+    setError("");
 
-    // Mockup: any 6 digits pass
-    await new Promise((r) => setTimeout(r, 800));
+    try {
+      const result = await verifyOtp({
+        mobile: picMobile.replace(/\D/g, ""),
+        otp: code,
+      });
 
-    // Mark onboarding complete in Supabase metadata (device-independent)
-    await supabase.auth.updateUser({ data: { onboarding_complete: true } });
-    setOnboardingStep(userId, "complete");
-    router.push("/dashboard");
+      if (!result.verified) {
+        throw new Error("Kode OTP tidak valid.");
+      }
+
+      await supabase.auth.updateUser({ data: { onboarding_complete: result.onboardingComplete } });
+      setUsingFallback(false);
+      setOnboardingStep(userId, "complete");
+      router.push("/dashboard");
+    } catch (err) {
+      setUsingFallback(true);
+      setShake(true);
+      setTimeout(() => setShake(false), 350);
+      setOtp(Array(OTP_LENGTH).fill(""));
+      inputRefs.current[0]?.focus();
+      setError(err instanceof Error ? err.message : "Gagal memverifikasi OTP.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleResend() {
     setResendLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setCountdown(RESEND_COOLDOWN);
-    setCanResend(false);
-    setOtp(Array(OTP_LENGTH).fill(""));
-    inputRefs.current[0]?.focus();
-    setResendLoading(false);
+    setError("");
+
+    try {
+      const response = await sendOtp({ mobile: picMobile.replace(/\D/g, "") });
+      setCountdown(response.expiresIn || RESEND_COOLDOWN);
+      setCanResend(false);
+      setOtp(Array(OTP_LENGTH).fill(""));
+      inputRefs.current[0]?.focus();
+      setUsingFallback(false);
+    } catch (err) {
+      setUsingFallback(true);
+      setError(err instanceof Error ? err.message : "Gagal mengirim ulang OTP.");
+    } finally {
+      setResendLoading(false);
+    }
   }
 
   const maskedPhone = picMobile
@@ -136,6 +166,15 @@ export default function OtpPage() {
       onLangToggle={() => setLang(lang === "id" ? "en" : "id")}
     >
       <div>
+        {(usingFallback || error) && (
+          <div className="mb-6 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              OTP sekarang mencoba endpoint backend sungguhan. Kalau gagal, itu bukan UX issue lagi—itu backend onboarding yang belum siap. {error}
+            </span>
+          </div>
+        )}
+
         {/* Header */}
         <div className="mb-8">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center shadow-lg shadow-primary/20 mb-5">
