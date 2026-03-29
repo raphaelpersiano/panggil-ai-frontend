@@ -27,17 +27,17 @@ const FALLBACK_METRICS: DashboardMetrics = {
   logs: 0,
   funnel: {
     telesales: [
-      { label: "Leads", value: 1240 },
-      { label: "Connected", value: 876 },
-      { label: "Follow Up", value: 512 },
-      { label: "Closing", value: 87 },
+      { label: "Leads", value: 0 },
+      { label: "Connected", value: 0 },
+      { label: "Follow Up", value: 0 },
+      { label: "Closing", value: 0 },
     ],
     collection: [
-      { label: "Leads", value: 940 },
-      { label: "Connected", value: 621 },
-      { label: "Follow Up", value: 388 },
-      { label: "Promise to Pay", value: 156 },
-      { label: "Closed", value: 54 },
+      { label: "Leads", value: 0 },
+      { label: "Connected", value: 0 },
+      { label: "Follow Up", value: 0 },
+      { label: "Promise to Pay", value: 0 },
+      { label: "Closed", value: 0 },
     ],
   },
 };

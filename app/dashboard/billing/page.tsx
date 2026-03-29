@@ -23,18 +23,9 @@ const TOP_UP_OPTIONS: TopUpOption[] = [
   { id: "5m", label: "5 Juta", amount: 5_000_000, badge: "Hemat Lebih", badgeColor: "bg-amber-500 text-white" },
 ];
 
-const FALLBACK_TRANSACTIONS: BillingTransaction[] = [
-  { id: "t1", type: "topup", description: "Top Up via QRIS", amount: 1_000_000, status: "success", createdAt: "2026-03-21T14:32:00Z" },
-  { id: "t2", type: "usage", description: "Panggilan Campaign Q1", amount: -48_600, status: "success", createdAt: "2026-03-22T09:12:00Z" },
-  { id: "t3", type: "usage", description: "Panggilan Campaign Q1", amount: -36_450, status: "success", createdAt: "2026-03-21T11:05:00Z" },
-  { id: "t4", type: "topup", description: "Top Up via Transfer BCA", amount: 2_000_000, status: "success", createdAt: "2026-03-15T10:00:00Z" },
-  { id: "t5", type: "usage", description: "Panggilan DPD 1–30 Mar", amount: -97_200, status: "success", createdAt: "2026-03-15T13:44:00Z" },
-  { id: "t6", type: "topup", description: "Top Up via OVO", amount: 500_000, status: "success", createdAt: "2026-03-10T09:15:00Z" },
-  { id: "t7", type: "usage", description: "Panggilan Q4 Overdue", amount: -267_300, status: "success", createdAt: "2026-03-08T16:00:00Z" },
-  { id: "t8", type: "topup", description: "Top Up via GoPay", amount: 500_000, status: "pending", createdAt: "2026-03-08T15:58:00Z" },
-];
+const FALLBACK_TRANSACTIONS: BillingTransaction[] = [];
 
-const FALLBACK_BALANCE = 2_050_450;
+const FALLBACK_BALANCE = 0;
 
 function fmtIDR(n: number, showSign = false) {
   const abs = Math.abs(n);

@@ -11,25 +11,15 @@ import type { AgentType, CallLog, CallLogSummary, Campaign } from "@/lib/types";
 type SortField = "createdAt" | "duration" | "cost";
 type SortDir = "asc" | "desc";
 
-const FALLBACK_CAMPAIGNS: Campaign[] = [
-  { id: "ts-1", name: "Q1 Product Launch 2026", type: "telesales", status: "active", scheduleMode: "scheduled", maxRetries: 3, retryIntervalMinutes: 30, maxConcurrent: 10, totalLeads: 1240, calledLeads: 450, createdAt: "2026-02-25T00:00:00Z" },
-  { id: "ts-2", name: "Promo Maret – Paket SME", type: "telesales", status: "scheduled", scheduleMode: "scheduled", maxRetries: 3, retryIntervalMinutes: 30, maxConcurrent: 10, totalLeads: 320, calledLeads: 0, createdAt: "2026-03-20T00:00:00Z" },
-  { id: "col-1", name: "DPD 1–30 Maret 2026", type: "collection", status: "active", scheduleMode: "scheduled", maxRetries: 3, retryIntervalMinutes: 30, maxConcurrent: 10, totalLeads: 621, calledLeads: 234, createdAt: "2026-03-01T00:00:00Z" },
-  { id: "col-2", name: "Priority Accounts Q1", type: "collection", status: "paused", scheduleMode: "scheduled", maxRetries: 3, retryIntervalMinutes: 30, maxConcurrent: 10, totalLeads: 156, calledLeads: 89, createdAt: "2026-03-05T00:00:00Z" },
-];
+const FALLBACK_CAMPAIGNS: Campaign[] = [];
 
-const FALLBACK_LOGS: CallLog[] = [
-  { callId: "CALL-001", campaignId: "ts-1", campaignName: "Q1 Product Launch 2026", agentType: "telesales", fromNumber: "02150001001", toNumber: "081234567890", duration: 187, endedBy: "agent", createdAt: "2026-03-22T09:12:34Z", cost: 5610 },
-  { callId: "CALL-002", campaignId: "col-1", campaignName: "DPD 1–30 Maret 2026", agentType: "collection", fromNumber: "02150001002", toNumber: "081298765432", duration: 312, endedBy: "leads", createdAt: "2026-03-22T09:25:01Z", cost: 9360 },
-  { callId: "CALL-003", campaignId: "ts-2", campaignName: "Promo Maret – Paket SME", agentType: "telesales", fromNumber: "02150001001", toNumber: "082345678901", duration: 45, endedBy: "leads", createdAt: "2026-03-22T09:38:15Z", cost: 1350 },
-  { callId: "CALL-004", campaignId: "col-2", campaignName: "Priority Accounts Q1", agentType: "collection", fromNumber: "02150001003", toNumber: "085454321098", duration: 156, endedBy: "leads", createdAt: "2026-03-22T10:45:33Z", cost: 4680 },
-];
+const FALLBACK_LOGS: CallLog[] = [];
 
 const FALLBACK_SUMMARY: CallLogSummary = {
-  totalCalls: 312,
-  totalDuration: 37440,
-  totalCost: 1123200,
-  avgDuration: 120,
+  totalCalls: 0,
+  totalDuration: 0,
+  totalCost: 0,
+  avgDuration: 0,
 };
 
 function fmtDuration(sec: number): string {

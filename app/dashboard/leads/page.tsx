@@ -14,17 +14,9 @@ type Tab = Occasion;
 
 const PAGE_SIZE = 20;
 
-const FALLBACK_TELESALES: Lead[] = [
-  { id: "1", type: "telesales", name: "Budi Santoso", mobile: "6281234567890", source: "Facebook Ads", status: "connected", lastCallTime: "2026-03-19T14:32:00Z", createdAt: "2026-03-10T00:00:00Z" },
-  { id: "2", type: "telesales", name: "Siti Rahayu", mobile: "6282345678901", source: "Instagram", status: "follow_up", lastCallTime: "2026-03-18T09:15:00Z", createdAt: "2026-03-10T00:00:00Z" },
-  { id: "3", type: "telesales", name: "Andi Wijaya", mobile: "6283456789012", source: "Website", status: "uncontacted", lastCallTime: null, createdAt: "2026-03-11T00:00:00Z" },
-];
+const FALLBACK_TELESALES: Lead[] = [];
 
-const FALLBACK_COLLECTION: Lead[] = [
-  { id: "4", type: "collection", name: "Bambang Sudarsono", mobile: "6281298765432", source: "Internal DB", status: "connected", lastCallTime: "2026-03-19T09:00:00Z", createdAt: "2026-03-01T00:00:00Z" },
-  { id: "5", type: "collection", name: "Rina Marlina", mobile: "6282187654321", source: "Internal DB", status: "follow_up", lastCallTime: "2026-03-17T14:10:00Z", createdAt: "2026-03-01T00:00:00Z" },
-  { id: "6", type: "collection", name: "Joko Susilo", mobile: "6283276543210", source: "Core Banking", status: "uncontacted", lastCallTime: null, createdAt: "2026-03-02T00:00:00Z" },
-];
+const FALLBACK_COLLECTION: Lead[] = [];
 
 const statusConfig: Record<LeadStatus, { label: string; className: string }> = {
   uncontacted: { label: "Belum Dihubungi", className: "bg-gray-100 text-gray-600" },
