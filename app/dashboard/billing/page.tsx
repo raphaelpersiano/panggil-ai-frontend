@@ -58,7 +58,8 @@ function fmtDate(value: string) {
 export default function BillingPage() {
   const [selected, setSelected] = useState<string>("1m");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [fetchError, setFetchError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [balance, setBalance] = useState<number>(FALLBACK_BALANCE);
   const [transactions, setTransactions] = useState<BillingTransaction[]>(FALLBACK_TRANSACTIONS);
   const [balanceLoading, setBalanceLoading] = useState(true);
@@ -73,7 +74,7 @@ export default function BillingPage() {
     async function load() {
       setBalanceLoading(true);
       setHistoryLoading(true);
-      setError("");
+      setFetchError("");
 
       try {
         const [balanceData, transactionData] = await Promise.all([
@@ -88,7 +89,7 @@ export default function BillingPage() {
       } catch (err) {
         if (cancelled) return;
         setUsingFallback(true);
-        setError(err instanceof Error ? err.message : "Gagal memuat billing.");
+        setFetchError(err instanceof Error ? err.message : "Gagal memuat billing.");
       } finally {
         if (!cancelled) {
           setBalanceLoading(false);
@@ -110,13 +111,13 @@ export default function BillingPage() {
 
   async function handleTopUp() {
     setLoading(true);
-    setError("");
+    setActionError("");
 
     try {
       const invoice = await createInvoice({ amount: chosen.amount });
       window.location.href = invoice.invoiceUrl;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal membuat invoice. Coba lagi.");
+      setActionError(err instanceof Error ? err.message : "Gagal membuat invoice. Coba lagi.");
       setLoading(false);
       return;
     }
@@ -134,10 +135,17 @@ export default function BillingPage() {
         </div>
       </div>
 
-      {(usingFallback || error) && (
+      {usingFallback && (
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>Billing backend belum sepenuhnya aktif. Menampilkan fallback UI. {error}</span>
+          <span>Billing backend belum sepenuhnya aktif. Menampilkan fallback UI. {fetchError}</span>
+        </div>
+      )}
+
+      {!usingFallback && fetchError && (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{fetchError}</span>
         </div>
       )}
 
@@ -191,10 +199,10 @@ export default function BillingPage() {
               ))}
             </div>
 
-            {error && (
+            {actionError && (
               <div className="mb-4 flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                {error}
+                {actionError}
               </div>
             )}
 

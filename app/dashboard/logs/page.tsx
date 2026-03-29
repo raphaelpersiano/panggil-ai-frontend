@@ -5,8 +5,8 @@ import {
   Search, Phone, Clock, DollarSign, Hash, Megaphone,
   ChevronUp, ChevronDown, ChevronsUpDown, X, Filter, AlertCircle,
 } from "lucide-react";
-import { listCampaigns, listLogs } from "@/lib/api";
-import type { AgentType, CallLog, Campaign } from "@/lib/types";
+import { getLogSummary, listCampaigns, listLogs } from "@/lib/api";
+import type { AgentType, CallLog, CallLogSummary, Campaign } from "@/lib/types";
 
 type SortField = "createdAt" | "duration" | "cost";
 type SortDir = "asc" | "desc";
@@ -24,6 +24,13 @@ const FALLBACK_LOGS: CallLog[] = [
   { callId: "CALL-003", campaignId: "ts-2", campaignName: "Promo Maret – Paket SME", agentType: "telesales", fromNumber: "02150001001", toNumber: "082345678901", duration: 45, endedBy: "leads", createdAt: "2026-03-22T09:38:15Z", cost: 1350 },
   { callId: "CALL-004", campaignId: "col-2", campaignName: "Priority Accounts Q1", agentType: "collection", fromNumber: "02150001003", toNumber: "085454321098", duration: 156, endedBy: "leads", createdAt: "2026-03-22T10:45:33Z", cost: 4680 },
 ];
+
+const FALLBACK_SUMMARY: CallLogSummary = {
+  totalCalls: 312,
+  totalDuration: 37440,
+  totalCost: 1123200,
+  avgDuration: 120,
+};
 
 function fmtDuration(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -73,6 +80,7 @@ export default function LogsPage() {
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState<CallLog[]>(FALLBACK_LOGS);
   const [campaigns, setCampaigns] = useState<Campaign[]>(FALLBACK_CAMPAIGNS);
+  const [summary, setSummary] = useState<CallLogSummary>(FALLBACK_SUMMARY);
   const [total, setTotal] = useState(FALLBACK_LOGS.length);
   const [loading, setLoading] = useState(false);
   const [usingFallback, setUsingFallback] = useState(false);
@@ -88,7 +96,7 @@ export default function LogsPage() {
       setError(null);
 
       try {
-        const [tsCampaigns, colCampaigns, logsResponse] = await Promise.all([
+        const [tsCampaigns, colCampaigns, logsResponse, summaryResponse] = await Promise.all([
           listCampaigns("telesales", 1, 100),
           listCampaigns("collection", 1, 100),
           listLogs({
@@ -100,11 +108,13 @@ export default function LogsPage() {
             sortBy: sortField,
             sortOrder: sortDir,
           }),
+          getLogSummary(),
         ]);
 
         if (cancelled) return;
         setCampaigns([...tsCampaigns.data, ...colCampaigns.data]);
         setRows(logsResponse.data);
+        setSummary(summaryResponse);
         setTotal(logsResponse.meta?.total ?? logsResponse.data.length);
         setUsingFallback(false);
       } catch (err) {
@@ -127,11 +137,9 @@ export default function LogsPage() {
     [agentFilter, campaigns],
   );
 
-  const statsRows = rows;
-  const totalSeconds = statsRows.reduce((sum, log) => sum + log.duration, 0);
-  const totalCalls = statsRows.length;
-  const totalCost = statsRows.reduce((sum, log) => sum + log.cost, 0);
-  const avgCost = totalCalls > 0 ? Math.round(totalCost / totalCalls) : 0;
+  const visibleTotalCalls = rows.length;
+  const visibleTotalCost = rows.reduce((sum, log) => sum + log.cost, 0);
+  const avgCost = visibleTotalCalls > 0 ? Math.round(visibleTotalCost / visibleTotalCalls) : 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const hasFilter = Boolean(search || agentFilter !== "all" || campaignFilter !== "all");
   const campaignName = campaigns.find((c) => c.id === campaignFilter)?.name ?? null;
@@ -177,10 +185,10 @@ export default function LogsPage() {
       )}
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
-        <StatCard icon={Clock} label="Total Menit Panggilan" value={`${(totalSeconds / 60).toFixed(1)} mnt`} sub="Halaman saat ini" color="bg-gradient-to-br from-[#12672a] to-[#1d9a40]" />
-        <StatCard icon={Hash} label="Jumlah Panggilan" value={totalCalls.toLocaleString("id-ID")} sub="Halaman saat ini" color="bg-gradient-to-br from-blue-500 to-blue-600" />
-        <StatCard icon={DollarSign} label="Total Biaya" value={fmtIDR(totalCost)} sub="Halaman saat ini" color="bg-gradient-to-br from-purple-500 to-purple-600" />
-        <StatCard icon={Phone} label="Rata-rata Biaya / Panggilan" value={fmtIDR(avgCost)} sub="Halaman saat ini" color="bg-gradient-to-br from-amber-500 to-amber-600" />
+        <StatCard icon={Clock} label="Total Menit Panggilan" value={`${(summary.totalDuration / 60).toFixed(1)} mnt`} sub="Semua log dari backend" color="bg-gradient-to-br from-[#12672a] to-[#1d9a40]" />
+        <StatCard icon={Hash} label="Jumlah Panggilan" value={summary.totalCalls.toLocaleString("id-ID")} sub="Semua log dari backend" color="bg-gradient-to-br from-blue-500 to-blue-600" />
+        <StatCard icon={DollarSign} label="Total Biaya" value={fmtIDR(summary.totalCost)} sub="Semua log dari backend" color="bg-gradient-to-br from-purple-500 to-purple-600" />
+        <StatCard icon={Phone} label="Rata-rata Biaya / Panggilan" value={fmtIDR(avgCost)} sub="Halaman/filter saat ini" color="bg-gradient-to-br from-amber-500 to-amber-600" />
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
