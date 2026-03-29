@@ -10,6 +10,7 @@ import type {
   Campaign,
   AgentConfig,
   CampaignSummary,
+  CampaignStatus,
   CreateCampaignPayload,
   CreateInvoicePayload,
   CreateLeadPayload,
@@ -125,6 +126,23 @@ export async function createCampaign(payload: CreateCampaignPayload) {
   const response = await request<Campaign>("/campaigns", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+
+  return response.data;
+}
+
+export async function updateCampaignStatus(campaignId: string, status: CampaignStatus) {
+  const response = await request<Campaign>(`/campaigns/${campaignId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+
+  return response.data;
+}
+
+export async function deleteCampaign(campaignId: string) {
+  const response = await request<{ message: string }>(`/campaigns/${campaignId}`, {
+    method: "DELETE",
   });
 
   return response.data;

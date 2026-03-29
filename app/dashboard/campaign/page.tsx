@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import {
   Megaphone, Plus, Play, Pause, Trash2,
   Calendar, Users, Clock, CheckCircle2,
-  AlertCircle, FileEdit, BarChart2,
+  AlertCircle, FileEdit, BarChart2, Loader2,
 } from "lucide-react";
-import { getCampaignSummary, listCampaigns } from "@/lib/api";
+import { deleteCampaign, getCampaignSummary, listCampaigns, updateCampaignStatus } from "@/lib/api";
 import type { Campaign, CampaignStatus, Occasion } from "@/lib/types";
 
 type CampaignTab = Occasion;
@@ -62,8 +62,10 @@ export default function CampaignPage() {
     collection: { totalCampaigns: 0, activeCampaigns: 0, totalLeads: 0, totalCalls: 0 },
   });
   const [loading, setLoading] = useState(false);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [usingFallback, setUsingFallback] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,6 +94,55 @@ export default function CampaignPage() {
     };
   }, [tab]);
 
+  async function refreshTab(type: CampaignTab) {
+    const [campaigns, summary] = await Promise.all([listCampaigns(type), getCampaignSummary(type)]);
+    setCampaignsByTab((prev) => ({ ...prev, [type]: campaigns.data }));
+    setSummaryByTab((prev) => ({ ...prev, [type]: summary }));
+  }
+
+  async function handleStatusAction(campaign: Campaign, status: Extract<CampaignStatus, "active" | "paused">) {
+    setActionLoadingId(campaign.id);
+    setActionError(null);
+
+    try {
+      const updated = await updateCampaignStatus(campaign.id, status);
+      setCampaignsByTab((prev) => ({
+        ...prev,
+        [tab]: prev[tab].map((item) => (item.id === campaign.id ? updated : item)),
+      }));
+      await refreshTab(tab);
+      setUsingFallback(false);
+    } catch (err) {
+      setUsingFallback(true);
+      setActionError(err instanceof Error ? err.message : "Gagal memperbarui status campaign.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleDeleteCampaign(campaign: Campaign) {
+    const confirmed = window.confirm(`Hapus campaign \"${campaign.name}\"? Ini hanya boleh untuk campaign draft atau completed.`);
+    if (!confirmed) return;
+
+    setActionLoadingId(campaign.id);
+    setActionError(null);
+
+    try {
+      await deleteCampaign(campaign.id);
+      setCampaignsByTab((prev) => ({
+        ...prev,
+        [tab]: prev[tab].filter((item) => item.id !== campaign.id),
+      }));
+      await refreshTab(tab);
+      setUsingFallback(false);
+    } catch (err) {
+      setUsingFallback(true);
+      setActionError(err instanceof Error ? err.message : "Gagal menghapus campaign.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
   const campaigns = useMemo(() => campaignsByTab[tab], [campaignsByTab, tab]);
   const summary = summaryByTab[tab];
 
@@ -114,7 +165,11 @@ export default function CampaignPage() {
         ))}
       </div>
 
-      {(usingFallback || error) && <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">Backend campaign belum lengkap. Menampilkan fallback UI. {error ?? ""}</div>}
+      {(usingFallback || error || actionError) && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          Backend campaign masih bikin frontend kerja sambil ngedumel. List/read sudah jalan, tapi kalau status update atau delete gagal berarti kontrak backend-nya belum konsisten. {error ?? actionError ?? ""}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         {[
@@ -158,7 +213,38 @@ export default function CampaignPage() {
                   <td className="px-4 py-4 hidden md:table-cell"><div className="flex items-center gap-1.5 text-xs text-gray-500"><Clock className="w-3.5 h-3.5 text-gray-300 shrink-0" />{scheduleLabel(c)}</div></td>
                   <td className="px-4 py-4"><ProgressBar called={c.calledLeads} total={c.totalLeads} /></td>
                   <td className="px-4 py-4 hidden lg:table-cell"><div className="flex items-center gap-1.5 text-xs text-gray-500"><Calendar className="w-3.5 h-3.5 text-gray-300 shrink-0" />{fmtDate(c.endDate)}</div></td>
-                  <td className="px-4 py-4"><div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end">{c.status === "active" && <button className="p-1.5 rounded-lg hover:bg-amber-50 text-gray-400 hover:text-amber-600 transition-colors" title="Jeda"><Pause className="w-4 h-4" /></button>}{(c.status === "paused" || c.status === "scheduled") && <button className="p-1.5 rounded-lg hover:bg-green-50 text-gray-400 hover:text-[#12672a] transition-colors" title="Mulai / Lanjutkan"><Play className="w-4 h-4" /></button>}<button className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors" title="Hapus"><Trash2 className="w-4 h-4" /></button></div></td>
+                  <td className="px-4 py-4">
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end">
+                      {c.status === "active" && (
+                        <button
+                          onClick={() => handleStatusAction(c, "paused")}
+                          disabled={actionLoadingId === c.id}
+                          className="p-1.5 rounded-lg hover:bg-amber-50 text-gray-400 hover:text-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Jeda"
+                        >
+                          {actionLoadingId === c.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pause className="w-4 h-4" />}
+                        </button>
+                      )}
+                      {(c.status === "paused" || c.status === "scheduled") && (
+                        <button
+                          onClick={() => handleStatusAction(c, "active")}
+                          disabled={actionLoadingId === c.id}
+                          className="p-1.5 rounded-lg hover:bg-green-50 text-gray-400 hover:text-[#12672a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Mulai / Lanjutkan"
+                        >
+                          {actionLoadingId === c.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDeleteCampaign(c)}
+                        disabled={actionLoadingId === c.id || !["draft", "completed"].includes(c.status)}
+                        className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        title={!["draft", "completed"].includes(c.status) ? "Hanya draft/completed yang bisa dihapus" : "Hapus"}
+                      >
+                        {actionLoadingId === c.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
