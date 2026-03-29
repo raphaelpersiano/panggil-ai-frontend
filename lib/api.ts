@@ -8,6 +8,7 @@ import type {
   CallLogListParams,
   CallLogSummary,
   Campaign,
+  AgentConfig,
   CampaignSummary,
   CreateCampaignPayload,
   CreateInvoicePayload,
@@ -192,5 +193,9 @@ export async function listLogs(params: CallLogListParams) {
 
 export async function getLogSummary() {
   const response = await request<CallLogSummary>("/logs/summary");
+  return response.data;
+}
+export async function listAgentConfigs(type?: "telesales" | "collection") {
+  const response = await request<AgentConfig[]>("/agents", undefined, { type });
   return response.data;
 }

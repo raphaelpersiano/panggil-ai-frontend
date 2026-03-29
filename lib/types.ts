@@ -212,3 +212,25 @@ export interface CallLogSummary {
   totalCost: number;
   avgDuration: number;
 }
+
+export interface AgentStructuredOutput {
+  name: string;
+  type: string;
+  description: string;
+}
+
+export interface AgentConfig {
+  id: string;
+  type: Occasion;
+  name: string;
+  firstMessage: string;
+  systemPrompt: string;
+  settings?: {
+    silenceTimeoutSeconds?: number;
+    maxDurationSeconds?: number;
+    immediateStopSeconds?: number;
+    backOffSeconds?: number;
+  };
+  structuredOutput?: AgentStructuredOutput[];
+  updatedAt?: string;
+}
