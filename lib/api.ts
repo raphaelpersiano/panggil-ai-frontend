@@ -80,10 +80,32 @@ export async function listLeads(params: LeadListParams): Promise<{ data: Lead[];
   return { data: response.data, meta: response.meta };
 }
 
+export async function getLead(leadId: string): Promise<Lead> {
+  const response = await request<Lead>(`/leads/${leadId}`);
+  return response.data;
+}
+
 export async function createLead(payload: CreateLeadPayload): Promise<Lead> {
   const response = await request<Lead>("/leads", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+
+  return response.data;
+}
+
+export async function updateLead(leadId: string, payload: Partial<CreateLeadPayload>): Promise<Lead> {
+  const response = await request<Lead>(`/leads/${leadId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+
+  return response.data;
+}
+
+export async function deleteLead(leadId: string) {
+  const response = await request<{ message: string }>(`/leads/${leadId}`, {
+    method: "DELETE",
   });
 
   return response.data;
