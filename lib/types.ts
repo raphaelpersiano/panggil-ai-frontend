@@ -130,6 +130,10 @@ export interface BillingTransaction {
   amount: number;
   status: TransactionStatus;
   createdAt: string;
+  invoiceId?: string;
+  externalId?: string;
+  expiresAt?: string;
+  paidAt?: string;
 }
 
 export interface CreateInvoicePayload {
