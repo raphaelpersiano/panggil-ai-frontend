@@ -5,7 +5,6 @@ import { Bot, MessageSquare, Settings2, List, Database, MessageCircle, AlertCirc
 import { listAgentConfigs } from "@/lib/api";
 import type { AgentConfig as ApiAgentConfig, AgentStructuredOutput } from "@/lib/types";
 
-/* ─── Types ───────────────────────────────────────────────── */
 type Tab = "telesales" | "collection";
 
 interface StructuredVar {
@@ -24,7 +23,6 @@ interface AgentConfigView {
   structuredOutput: StructuredVar[];
 }
 
-/* ─── Fallback configs ────────────────────────────────────── */
 const FALLBACK_CONFIGS: Record<Tab, AgentConfigView> = {
   telesales: {
     firstMessage: "",
@@ -46,10 +44,22 @@ const FALLBACK_CONFIGS: Record<Tab, AgentConfigView> = {
   },
 };
 
-const DEFAULT_OUTPUT: StructuredVar[] = [
-  { name: "Call Summary", type: "Text", description: "Ringkasan otomatis isi percakapan yang dihasilkan oleh sistem AI." },
-  { name: "Call Duration", type: "Number (seconds)", description: "Durasi total panggilan dalam detik, dihitung dari koneksi hingga pemutusan." },
-  { name: "Call Recording", type: "URL", description: "Tautan ke rekaman audio panggilan yang tersimpan di sistem." },
+const BACKEND_ARTIFACTS: StructuredVar[] = [
+  {
+    name: "recordingUrl",
+    type: "string | undefined",
+    description: "URL rekaman panggilan dari GET /logs/:callId jika backend menyimpan audio call.",
+  },
+  {
+    name: "transcript",
+    type: "string | undefined",
+    description: "Transkrip percakapan lengkap dari detail call log ketika backend sudah mengekstrak isi percakapan.",
+  },
+  {
+    name: "structuredOutput",
+    type: "object | undefined",
+    description: "Output terstruktur hasil inferensi backend per call. Bentuk finalnya mengikuti konfigurasi agent yang backend expose.",
+  },
 ];
 
 function normalizeConfig(config?: ApiAgentConfig): AgentConfigView | null {
@@ -72,7 +82,6 @@ function normalizeConfig(config?: ApiAgentConfig): AgentConfigView | null {
   };
 }
 
-/* ─── Sub-components ──────────────────────────────────────── */
 function SectionHeading({ icon: Icon, title }: { icon: React.ElementType; title: string }) {
   return (
     <div className="flex items-center gap-2 mb-4">
@@ -142,7 +151,15 @@ function DisabledTextarea({
   );
 }
 
-function VariableTable({ vars }: { vars: StructuredVar[] }) {
+function VariableTable({ vars, emptyMessage }: { vars: StructuredVar[]; emptyMessage?: string }) {
+  if (vars.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500">
+        {emptyMessage ?? "Belum ada data yang dikembalikan backend."}
+      </div>
+    );
+  }
+
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200">
       <table className="w-full text-sm">
@@ -177,7 +194,6 @@ function VariableTable({ vars }: { vars: StructuredVar[] }) {
   );
 }
 
-/* ─── Page ────────────────────────────────────────────────── */
 export default function AgentPage() {
   const [activeTab, setActiveTab] = useState<Tab>("telesales");
   const [configs, setConfigs] = useState<Record<Tab, AgentConfigView>>(FALLBACK_CONFIGS);
@@ -263,7 +279,7 @@ export default function AgentPage() {
         <div className="mb-6 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            Backend agent config belum stabil. Menampilkan fallback read-only. {error ?? ""}
+            Backend agent config belum stabil. Frontend sekarang sengaja berhenti mengarang default config palsu — kalau data kosong, ya memang backend belum kasih kontrak yang layak. {error ?? ""}
           </span>
         </div>
       )}
@@ -327,15 +343,18 @@ export default function AgentPage() {
           <p className="text-xs text-gray-400 mb-4 leading-relaxed">
             Variabel yang akan dikumpulkan agent dari customer selama panggilan berlangsung.
           </p>
-          <VariableTable vars={cfg.structuredOutput} />
+          <VariableTable
+            vars={cfg.structuredOutput}
+            emptyMessage="Backend belum mengirim definisi structured output untuk tipe agent ini."
+          />
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <SectionHeading icon={Database} title="Default Output" />
+          <SectionHeading icon={Database} title="Artefak Call Log dari Backend" />
           <p className="text-xs text-gray-400 mb-4 leading-relaxed">
-            Variabel yang secara otomatis di-generate oleh sistem setelah setiap panggilan selesai.
+            Ini bukan dummy UI lagi. Bagian ini merangkum field yang memang sudah disebut di kontrak detail log backend, jadi operator tahu output apa yang realistis tersedia setelah panggilan selesai.
           </p>
-          <VariableTable vars={DEFAULT_OUTPUT} />
+          <VariableTable vars={BACKEND_ARTIFACTS} />
         </div>
 
         <div className="bg-gradient-to-r from-[#12672a]/5 to-[#1d9a40]/10 border border-[#12672a]/20 rounded-2xl p-6 flex items-center gap-5">

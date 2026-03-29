@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { t, type Language } from "@/lib/i18n";
-import { getLogSummary, listCampaigns, listLeads } from "@/lib/api";
+import { getCampaignSummary, getLogSummary, listLeads } from "@/lib/api";
 import type { Lead, Occasion } from "@/lib/types";
 import {
   PartyPopper, X, Globe, Users, PhoneCall, BarChart2, ChevronRight, AlertCircle,
 } from "lucide-react";
 
 const CONGRATS_KEY = "panggil_congrats_shown";
+const FUNNEL_SAMPLE_LIMIT = 100;
 
 type FunnelStage = { label: string; value: number };
 
@@ -20,6 +21,8 @@ type DashboardMetrics = {
   logs: number;
   funnel: Record<Occasion, FunnelStage[]>;
 };
+
+type FunnelCoverage = Record<Occasion, { sampled: number; total: number }>;
 
 const FALLBACK_METRICS: DashboardMetrics = {
   leads: 0,
@@ -40,6 +43,11 @@ const FALLBACK_METRICS: DashboardMetrics = {
       { label: "Closed", value: 0 },
     ],
   },
+};
+
+const FALLBACK_COVERAGE: FunnelCoverage = {
+  telesales: { sampled: 0, total: 0 },
+  collection: { sampled: 0, total: 0 },
 };
 
 const STAGE_HEIGHTS = [200, 162, 126, 96, 72] as const;
@@ -153,12 +161,18 @@ const QUICK_STEPS = (lang: Language, counts: { leads: number; campaigns: number;
   },
 ];
 
+function coverageLabel(sampled: number, total: number) {
+  if (total <= 0 || sampled <= 0) return "0%";
+  return `${Math.min(100, Math.round((sampled / total) * 100))}%`;
+}
+
 export default function DashboardPage() {
   const [lang, setLang] = useState<Language>("id");
   const [showCongrats, setShowCongrats] = useState(false);
   const [userName, setUserName] = useState("");
   const [activeTab, setActiveTab] = useState<Occasion>("telesales");
   const [metrics, setMetrics] = useState<DashboardMetrics>(FALLBACK_METRICS);
+  const [coverage, setCoverage] = useState<FunnelCoverage>(FALLBACK_COVERAGE);
   const [usingFallback, setUsingFallback] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -179,11 +193,11 @@ export default function DashboardPage() {
     async function load() {
       setError(null);
       try {
-        const [telesalesLeads, collectionLeads, telesalesCampaigns, collectionCampaigns, logsSummary] = await Promise.all([
-          listLeads({ type: "telesales", page: 1, limit: 100, sortBy: "newest" }),
-          listLeads({ type: "collection", page: 1, limit: 100, sortBy: "newest" }),
-          listCampaigns("telesales", 1, 100),
-          listCampaigns("collection", 1, 100),
+        const [telesalesLeads, collectionLeads, telesalesSummary, collectionSummary, logsSummary] = await Promise.all([
+          listLeads({ type: "telesales", page: 1, limit: FUNNEL_SAMPLE_LIMIT, sortBy: "newest" }),
+          listLeads({ type: "collection", page: 1, limit: FUNNEL_SAMPLE_LIMIT, sortBy: "newest" }),
+          getCampaignSummary("telesales"),
+          getCampaignSummary("collection"),
           getLogSummary(),
         ]);
 
@@ -191,11 +205,21 @@ export default function DashboardPage() {
 
         setMetrics({
           leads: (telesalesLeads.meta?.total ?? telesalesLeads.data.length) + (collectionLeads.meta?.total ?? collectionLeads.data.length),
-          campaigns: (telesalesCampaigns.meta?.total ?? telesalesCampaigns.data.length) + (collectionCampaigns.meta?.total ?? collectionCampaigns.data.length),
+          campaigns: telesalesSummary.totalCampaigns + collectionSummary.totalCampaigns,
           logs: logsSummary.totalCalls,
           funnel: {
             telesales: buildFunnel("telesales", telesalesLeads.data),
             collection: buildFunnel("collection", collectionLeads.data),
+          },
+        });
+        setCoverage({
+          telesales: {
+            sampled: telesalesLeads.data.length,
+            total: telesalesLeads.meta?.total ?? telesalesLeads.data.length,
+          },
+          collection: {
+            sampled: collectionLeads.data.length,
+            total: collectionLeads.meta?.total ?? collectionLeads.data.length,
           },
         });
         setUsingFallback(false);
@@ -222,6 +246,8 @@ export default function DashboardPage() {
 
   const steps = useMemo(() => QUICK_STEPS(lang, metrics), [lang, metrics]);
   const stages = metrics.funnel[activeTab];
+  const funnelCoverage = coverage[activeTab];
+  const funnelIsSampled = funnelCoverage.total > funnelCoverage.sampled;
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -270,14 +296,21 @@ export default function DashboardPage() {
         <div className="mb-6 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            Dashboard summary belum punya endpoint backend yang proper, jadi funnel ini dihitung dari sample list read yang tersedia. {error ?? ""}
+            Dashboard sekarang pakai endpoint summary backend untuk campaign dan logs, tapi funnel masih terpaksa disampling dari <strong>GET /leads</strong>. Kalau backend belum kasih summary leads yang proper, frontend cuma bisa jujur soal coverage-nya. {error ?? ""}
           </span>
         </div>
       )}
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="font-semibold text-gray-900">{lang === "id" ? "Funnel Leads" : "Leads Funnel"}</h2>
+          <div>
+            <h2 className="font-semibold text-gray-900">{lang === "id" ? "Funnel Leads" : "Leads Funnel"}</h2>
+            <p className="text-xs text-gray-400 mt-1">
+              {funnelIsSampled
+                ? `Ditampilkan dari ${funnelCoverage.sampled.toLocaleString("id-ID")} / ${funnelCoverage.total.toLocaleString("id-ID")} leads ${activeTab} (${coverageLabel(funnelCoverage.sampled, funnelCoverage.total)} coverage)`
+                : `Menggunakan ${funnelCoverage.sampled.toLocaleString("id-ID")} leads ${activeTab} yang tersedia dari backend`}
+            </p>
+          </div>
           <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
             {(["telesales", "collection"] as const).map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${activeTab === tab ? "bg-white text-[#12672a] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
@@ -289,7 +322,7 @@ export default function DashboardPage() {
 
         <FunnelChart stages={stages} />
         <p className="mt-3 text-xs text-gray-400">
-          Funnel ini dihitung dari <strong>GET /leads</strong> per tipe. Belum ada endpoint summary dedicated, jadi kalau backend cuma kirim page pertama maka insight ini juga ikut kepotong.
+          Funnel ini masih dihitung dari pembacaan list lead, bukan endpoint agregasi khusus. Jadi kalau backend cuma sanggup mengembalikan page pertama atau belum menyediakan summary status per tipe, insight conversion di sini memang belum bisa 100% dipercaya.
         </p>
       </div>
 
