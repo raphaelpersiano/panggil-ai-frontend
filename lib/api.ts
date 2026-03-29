@@ -243,6 +243,12 @@ export async function getLogSummary() {
   const response = await request<CallLogSummary>("/logs/summary");
   return response.data;
 }
+
+export async function getLogDetail(callId: string) {
+  const response = await request<CallLog>(`/logs/${callId}`);
+  return response.data;
+}
+
 export async function listAgentConfigs(type?: "telesales" | "collection") {
   const response = await request<AgentConfig[]>("/agents", undefined, { type });
   return response.data;
