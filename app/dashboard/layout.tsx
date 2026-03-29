@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getProfileSafe } from "@/lib/api";
+import { supabase, getOnboardingStep } from "@/lib/supabase";
 import Sidebar from "@/components/Sidebar";
 import { type Language } from "@/lib/i18n";
 
@@ -12,12 +13,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) {
         router.replace("/login");
         return;
       }
-      setReady(true);
+
+      const profile = await getProfileSafe();
+      if (profile?.onboardingComplete) {
+        setReady(true);
+        return;
+      }
+
+      if (session.user.user_metadata?.onboarding_complete === true) {
+        setReady(true);
+        return;
+      }
+
+      const step = getOnboardingStep(session.user.id);
+      router.replace(step === "otp" ? "/onboarding/otp" : "/onboarding/company-profile");
     });
   }, [router]);
 

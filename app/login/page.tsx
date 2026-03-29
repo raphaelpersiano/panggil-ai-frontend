@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase, getOnboardingStep } from "@/lib/supabase";
+import { getProfileSafe } from "@/lib/api";
 import { t, type Language } from "@/lib/i18n";
 import Link from "next/link";
 import {
@@ -13,6 +14,16 @@ import {
 export default function LoginPage() {
   const router = useRouter();
   const [lang, setLang] = useState<Language>("id");
+
+  async function resolvePostLoginRoute(userId: string, metadataComplete?: boolean) {
+    const profile = await getProfileSafe();
+    if (profile?.onboardingComplete) return "/dashboard";
+    if (metadataComplete === true) return "/dashboard";
+
+    const step = getOnboardingStep(userId);
+    if (step === "otp") return "/onboarding/otp";
+    return "/onboarding/company-profile";
+  }
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -52,22 +63,13 @@ export default function LoginPage() {
   }, [testimonials.length]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) return;
-      // Existing users who completed onboarding go straight to dashboard
-      if (session.user.user_metadata?.onboarding_complete === true) {
-        router.replace("/dashboard");
-        return;
-      }
-      // New / mid-onboarding users — resume from last step
-      const step = getOnboardingStep(session.user.id);
-      if (!step || step === "company-profile") {
-        router.replace("/onboarding/company-profile");
-      } else if (step === "otp") {
-        router.replace("/onboarding/otp");
-      } else {
-        router.replace("/dashboard");
-      }
+      const nextRoute = await resolvePostLoginRoute(
+        session.user.id,
+        session.user.user_metadata?.onboarding_complete === true,
+      );
+      router.replace(nextRoute);
     });
   }, [router]);
 
@@ -88,20 +90,11 @@ export default function LoginPage() {
     }
 
     if (data.session) {
-      // Existing user who already completed onboarding → dashboard directly
-      if (data.session.user.user_metadata?.onboarding_complete === true) {
-        router.replace("/dashboard");
-        return;
-      }
-      // Resume mid-onboarding
-      const step = getOnboardingStep(data.session.user.id);
-      if (!step || step === "company-profile") {
-        router.replace("/onboarding/company-profile");
-      } else if (step === "otp") {
-        router.replace("/onboarding/otp");
-      } else {
-        router.replace("/dashboard");
-      }
+      const nextRoute = await resolvePostLoginRoute(
+        data.session.user.id,
+        data.session.user.user_metadata?.onboarding_complete === true,
+      );
+      router.replace(nextRoute);
     }
   }
 

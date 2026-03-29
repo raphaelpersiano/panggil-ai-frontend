@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { getProfileSafe } from "@/lib/api";
 import { supabase, getOnboardingStep } from "@/lib/supabase";
 
 export default function RootPage() {
@@ -16,19 +17,22 @@ export default function RootPage() {
         return;
       }
 
-      // Source of truth: Supabase user metadata (device-independent)
+      const profile = await getProfileSafe();
+      if (profile?.onboardingComplete) {
+        router.replace("/dashboard");
+        return;
+      }
+
       if (session.user.user_metadata?.onboarding_complete === true) {
         router.replace("/dashboard");
         return;
       }
-      // Fallback: localStorage step for mid-onboarding recovery
+
       const step = getOnboardingStep(session.user.id);
-      if (!step || step === "company-profile") {
-        router.replace("/onboarding/company-profile");
-      } else if (step === "otp") {
+      if (step === "otp") {
         router.replace("/onboarding/otp");
       } else {
-        router.replace("/dashboard");
+        router.replace("/onboarding/company-profile");
       }
     }
 

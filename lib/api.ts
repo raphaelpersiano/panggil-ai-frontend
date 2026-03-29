@@ -171,6 +171,14 @@ export async function getProfile() {
   return response.data;
 }
 
+export async function getProfileSafe() {
+  try {
+    return await getProfile();
+  } catch {
+    return null;
+  }
+}
+
 export async function updateProfile(payload: UpdateProfilePayload) {
   const response = await request<UserProfile>("/users/profile", {
     method: "PUT",
