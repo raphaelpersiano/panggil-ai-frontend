@@ -153,6 +153,11 @@ export async function createCampaign(payload: CreateCampaignPayload) {
   return response.data;
 }
 
+export async function getCampaign(campaignId: string) {
+  const response = await request<Campaign>(`/campaigns/${campaignId}`);
+  return response.data;
+}
+
 export async function updateCampaignStatus(campaignId: string, status: CampaignStatus) {
   const response = await request<Campaign>(`/campaigns/${campaignId}/status`, {
     method: "PATCH",
