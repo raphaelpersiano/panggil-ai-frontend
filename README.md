@@ -50,9 +50,13 @@ The frontend expects these backend endpoints (relative to `NEXT_PUBLIC_API_BASE_
 - `GET /billing/balance` — current balance
 - `GET /billing/transactions` — transaction history
 - `POST /billing/invoices` — create invoice (Xendit)
+- **Webhook callback** (`POST /api/billing/xendit-callback`) is implemented in frontend. For it to function, backend must provide:
+  - A `credit_balance(p_user_id UUID, p_amount NUMERIC)` RPC function to atomically increment user balances upon payment.
+  - A `transactions` table with columns: `user_id`, `invoice_id`, `external_id`, `type` (`topup`/`usage`), `amount` (signed), `paid_at`, `status` (`success`/`pending`/`failed`/`expired`), `created_at`.
+  - Proper idempotency and RLS rules.
 
 **Webhooks**
-- `POST /api/billing/xendit-callback` — must be registered in Xendit Dashboard
+- `POST /api/billing/xendit-callback` — must be reachable by Xendit; register the full URL in Xendit Dashboard.
 
 ## Environment Variables Required
 ```bash
@@ -65,11 +69,23 @@ XENDIT_SECRET_KEY=
 XENDIT_CALLBACK_TOKEN=  # optional but recommended
 ```
 
-## Current Blockers
-- **Backend API must be live** at the configured `NEXT_PUBLIC_API_BASE_URL`
-- Webhook endpoint `/api/billing/xendit-callback` must be reachable by Xendit
-- `create-invoice` route needs `XENDIT_SECRET_KEY` to work
-- Backend must implement all endpoints listed above with correct request/response shapes
+## Current Blockers (Backend Requirements)
+
+1. **Billing Webhook DB Support** — Implement `credit_balance` RPC and `transactions` table as described above. Without these, the webhook will fail to credit balances and log payments.
+
+2. **Lead Status Aggregation** — Provide `GET /leads/summary` returning counts per status (`uncontacted`, `connected`, `follow_up`, `promise_to_pay`, `closed`) for each campaign type. This replaces the current funnel sampling approach and provides accurate metrics.
+
+3. **Call Log Artifacts** — Ensure `GET /logs/:callId` always includes `recordingUrl`, `transcript`, and `structuredOutput` fields after call completion.
+
+4. **Agent Config Seeding** — On account creation or first use, seed at least one default agent configuration per occasion type (`telesales`, `collection`) so `GET /agents` never returns an empty array.
+
+5. **Campaign Schedule Validation** — For scheduled campaigns, validate and persist `selectedDays` and `dayTimes` correctly; frontend shows warnings if these fields are missing or inconsistent.
+
+6. **Profile Documents Status** — The `UserProfile.documents` field should always be an object (not `null`/`undefined`) with at least `{ status: "not_uploaded" }` when no documents are uploaded.
+
+7. **Deploy Backend & Configure CORS** — The backend must be deployed and reachable from the Vercel frontend. Ensure CORS allows the frontend origin and `NEXT_PUBLIC_API_BASE_URL` is correctly set in Vercel environment variables.
+
+Once these are addressed, the frontend will operate without fallback complaints.
 
 ## Coordination Notes
 - Frontend is feature-complete and ready for backend integration testing
