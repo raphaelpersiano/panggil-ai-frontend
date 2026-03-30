@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     paid_at:     string;
   };
 
-  console.log(`[xendit-callback] invoice=${invoiceId} external=${externalId} status=${status} amount=${paidAmount}`);
+  // Log webhook receipt for audit (remove in prod if using structured logging)
 
   /* ── 3. Handle PAID status ── */
   if (status === "PAID") {
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
      * });
      */
 
-    console.log(`[xendit-callback] PAID — userId=${userId} amount=${amount} paidAt=${paidAt}`);
+    // Balance credit and transaction logging must be implemented in backend service
   }
 
   /* ── 4. Handle EXPIRED / FAILED ── */

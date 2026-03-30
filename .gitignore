@@ -1,41 +1,23 @@
-# dependencies
+# .gitignore
+
+# Node
 node_modules/
-/.pnp
-.pnp.js
-.yarn/install-state.gz
+package-lock.json
 
-# testing
-/coverage
-
-# next.js
+# Build
+/dist/
+/build/
 /.next/
-/out/
 
-# production
-/build
+# Testing
+/coverage/
+/.jest_cache/
 
-# misc
+# Misc
 .DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# env files — JANGAN commit ke git (berisi secret keys)
-.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-# claude worktree metadata
-.claude/
+.env.*.local
+.env.*.local.*
