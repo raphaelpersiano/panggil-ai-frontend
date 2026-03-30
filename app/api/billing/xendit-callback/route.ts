@@ -47,9 +47,7 @@ export async function POST(request: NextRequest) {
 
   /* ── 3. Handle PAID status ── */
   if (status === "PAID") {
-    // Parse userId and amount from externalId: panggil-topup-{userId}-{amount}-{ts}
     const parts  = (externalId ?? "").split("-");
-    // parts: ["panggil", "topup", userId, amount, ts]
     const userId = parts[2];
     const amount = parseInt(parts[3], 10);
 
@@ -58,42 +56,65 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    /**
-     * TODO: Credit user balance in your database.
-     *
-     * Example with Supabase:
-     *
-     * import { createClient } from "@supabase/supabase-js";
-     * const supabase = createClient(
-     *   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-     *   process.env.SUPABASE_SERVICE_ROLE_KEY!
-     * );
-     *
-     * // Upsert balance
-     * const { error } = await supabase.rpc("credit_balance", {
-     *   p_user_id: userId,
-     *   p_amount:  amount,
-     * });
-     *
-     * // Log transaction
-     * await supabase.from("transactions").insert({
-     *   user_id:     userId,
-     *   invoice_id:  invoiceId,
-     *   external_id: externalId,
-     *   type:        "topup",
-     *   amount,
-     *   paid_at:     paidAt,
-     *   status:      "success",
-     * });
-     */
+    // 3a. Credit user balance via RPC (atomic, avoids race conditions)
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
-    // Balance credit and transaction logging must be implemented in backend service
+    const { error: rpcErr } = await supabase.rpc("credit_balance", {
+      p_user_id: userId,
+      p_amount: amount,
+    });
+
+    if (rpcErr) {
+      console.error("[xendit-callback] credit_balance RPC failed:", rpcErr.message);
+      // Continue to transaction logging anyway; do not retry webhook
+    }
+
+    // 3b. Log transaction record for audit trail
+    const { error: insertErr } = await supabase.from("transactions").insert({
+      user_id: userId,
+      invoice_id: invoiceId,
+      external_id: externalId,
+      type: "topup",
+      amount,
+      paid_at: paidAt,
+      status: "success",
+    });
+
+    if (insertErr) {
+      console.error("[xendit-callback] transaction insert failed:", insertErr.message);
+    }
   }
 
   /* ── 4. Handle EXPIRED / FAILED ── */
   if (status === "EXPIRED" || status === "FAILED") {
     console.log(`[xendit-callback] ${status} — invoiceId=${invoiceId} externalId=${externalId}`);
-    // TODO: log failed transaction to DB if needed
+
+    // Attempt to log failed transaction if we can parse userId/amount
+    const parts = (externalId ?? "").split("-");
+    const userId = parts[2];
+    const amount = parseInt(parts[3], 10);
+
+    if (userId && !isNaN(amount)) {
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+
+      await supabase.from("transactions").insert({
+        user_id: userId,
+        invoice_id: invoiceId,
+        external_id: externalId,
+        type: "topup",
+        amount,
+        status: status === "FAILED" ? "failed" : "expired",
+      }).catch((err) => {
+        console.error("[xendit-callback] failed to log failed transaction:", err.message);
+      });
+    }
+    // No further action for EXPIRED/FAILED
   }
 
   // Always respond 200 to Xendit, otherwise it will retry
